@@ -1,0 +1,10 @@
+.uploadWrapper :global(.ant-upload.ant-upload-drag) {
+  height: 220px !important;
+}
+
+.uploadWrapper :global(.ant-upload-drag p.ant-upload-text) {
+  font-size: 14px !important;
+}
+.uploadWrapper :global(.ant-upload-drag p.ant-upload-hint) {
+  font-size: 12px !important;
+}
