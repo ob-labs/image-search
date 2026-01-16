@@ -1,3 +1,7 @@
+"""
+OceanBase image vector store wrapper.
+"""
+
 import os
 from tqdm import tqdm
 from typing import Iterator
@@ -11,6 +15,7 @@ from pyobvector import (
 from sqlalchemy import Column, Integer, JSON, String
 from sqlalchemy import func
 
+# Table schema used for image storage
 cols = [
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("file_name", String(512)),
@@ -18,15 +23,21 @@ cols = [
     Column("embedding", VECTOR(512)),
 ]
 
+# Columns to return in ANN search results
 output_fields = [
     "id",
     "file_name",
     "file_path",
+
     # "embedding",
 ]
 
 
 class OBImageStore:
+    """
+    High-level helper for loading and searching image vectors.
+    """
+
     def __init__(
         self,
         *,
@@ -36,6 +47,8 @@ class OBImageStore:
         password: str = "",
         **kwargs,
     ):
+
+        # Create the OceanBase vector client
         self.client = ObVecClient(
             user=user,
             uri=uri,
@@ -44,6 +57,9 @@ class OBImageStore:
         )
 
     def load_amount(self, dir_path: str) -> int:
+        """
+        Return the number of images under a directory.
+        """
         return load_amount(dir_path)
 
     def load_image_dir(
@@ -52,18 +68,27 @@ class OBImageStore:
         batch_size: int = 32,
         table_name: str = "image_search",
     ) -> Iterator:
+        """
+        Load images from a directory, creating table/index if missing.
+        """
         if not self.client.check_table_exists(table_name):
+
+            # Create the table schema if it does not exist
             self.client.create_table(table_name, columns=cols)
             vals = []
             params = self.client.perform_raw_text_sql(
                 "SHOW PARAMETERS LIKE '%ob_vector_memory_limit_percentage%'"
             )
+
+            # Read current memory limit percentage
             for row in params:
                 val = int(row[6])
                 vals.append(val)
             if len(vals) == 0:
                 print("ob_vector_memory_limit_percentage not found in parameters.")
                 exit(1)
+
+            # Ensure vector memory limit is not zero
             if any(val == 0 for val in vals):
                 try:
                     self.client.perform_raw_text_sql(
@@ -73,6 +98,8 @@ class OBImageStore:
                     raise Exception(
                         "Failed to set ob_vector_memory_limit_percentage to 30.", e
                     )
+
+            # Create ANN index for the embedding column
             self.client.create_index(
                 table_name,
                 is_vec_index=True,
@@ -81,10 +108,14 @@ class OBImageStore:
                 vidx_params="distance=l2, type=hnsw, lib=vsag",
             )
 
+
+        # Increase query timeout for large batches
         self.client.perform_raw_text_sql("SET ob_query_timeout=100000000")
         batch = []
         total = load_amount(dir_path)
         for img in tqdm(load_imgs(dir_path), total=total):
+
+            # Accumulate rows and yield for progress updates
             batch.append(img.model_dump())
             yield
             if len(batch) == batch_size:
@@ -99,6 +130,11 @@ class OBImageStore:
         limit: int = 10,
         table_name: str = "image_search",
     ) -> list[dict[str, any]]:
+        """
+        Search similar images by embedding distance.
+        """
+
+        # Embed the target image for ANN search
         target_embedding = embed_img(image_path)
 
         res = self.client.ann_search(
@@ -110,6 +146,8 @@ class OBImageStore:
             output_column_names=output_fields,
             with_dist=True,
         )
+
+        # Map raw tuples into dictionaries
         return [
             {
                 "id": r[0],

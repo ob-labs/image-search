@@ -1,8 +1,13 @@
+"""
+Streamlit frontend for loading and searching images.
+"""
+
 import os
 import time
 from pathlib import Path
 import dotenv
 
+# Load environment variables for configuration
 dotenv.load_dotenv()
 
 import streamlit as st
@@ -11,15 +16,18 @@ from image_search.connection import connection_args
 from image_search.i18n import t
 from image_search.utils import extract_bundle
 
+# Prepare paths for demo assets and temp files
 base_dir = Path(__file__).resolve().parents[1]
 data_dir = base_dir / "data"
 demo_dir = data_dir / "demo"
 tmp_dir = data_dir / "tmp"
 tmp_path = tmp_dir / "temp.jpg"
 
+# Cache uploaded archives in session state
 if "archives" not in st.session_state:
     st.session_state.archives = {}
 
+# Configure page metadata and header
 st.set_page_config(
     layout="wide",
     page_title=t("title"),
@@ -27,10 +35,14 @@ st.set_page_config(
 )
 st.title(t("title"))
 st.caption(t("caption"))
+
+# Ensure temp folders exist
 os.makedirs(tmp_dir / "archives", exist_ok=True)
 os.makedirs(tmp_dir / "extracted", exist_ok=True)
 
 with st.sidebar:
+
+    # Sidebar settings and inputs
     st.title(t("settings"))
     st.logo(str(demo_dir / "logo.png"))
     st.subheader(t("search_setting"))
@@ -48,12 +60,15 @@ with st.sidebar:
         t("upload_image_archive"),
         type=["zip", "tar", "tar.gz", "bz2", "xz"],
     )
+
+    # Persist newly uploaded archive files
     if archive is not None and archive.name not in st.session_state.archives:
         with open(tmp_dir / "archives" / archive.name, "wb") as f:
             f.write(archive.read())
             st.session_state.archives[archive.name] = True
             st.rerun()
 
+    # Select a previously uploaded archive
     archives = os.listdir(tmp_dir / "archives")
     selected_archive = st.selectbox(
         t("image_archive"),
@@ -64,16 +79,20 @@ with st.sidebar:
     )
     click_load = st.button(t("load_images"))
 
+# Initialize the vector store client
 store = OBImageStore(
     uri=f"{connection_args['host']}:{connection_args['port']}",
     **connection_args,
 )
 
+# Main interaction flow: table validation, load images, or search images
 table_exist = store.client.check_table_exists(table_name)
 if not table_name or table_name.isspace():
     st.error(t("set_table_name_pls"))
     st.stop()
 elif click_load:
+
+    # Load images from the selected archive into the database
     if not selected_archive:
         st.error(t("set_image_base_pls"))
     else:
@@ -94,6 +113,8 @@ elif click_load:
         time.sleep(2)
         st.rerun()
 elif table_exist:
+
+    # Search similar images with an uploaded query image
     uploaded_image = st.file_uploader(
         label=t("image_upload_label"),
         type=["jpg", "jpeg", "png"],
@@ -105,6 +126,7 @@ elif table_exist:
         col1.caption(t("uploaded_image_caption"))
         col1.image(uploaded_image, use_column_width=True)
 
+        # Persist the uploaded image to a temp file for search
         with open(tmp_path, "wb") as f:
             f.write(uploaded_image.read())
 
@@ -123,4 +145,6 @@ elif table_exist:
                             st.write(t("file_path"), os.path.join(res["file_path"]))
                         st.image(res["file_path"])
 else:
+
+    # Table does not exist yet
     st.warning(t("table_not_exist", table_name))

@@ -1,5 +1,10 @@
+"""
+Simple i18n helper with built-in translation dictionary.
+"""
+
 import os
 
+# Translation table keyed by language code
 tr = {
     "en": {
         "title": "🔍 Image Search",
@@ -75,6 +80,7 @@ tr = {
     },
 }
 
+# Read UI language from env and fallback to zh
 lang = os.getenv("UI_LANG", "zh")
 if lang not in ["en", "zh"]:
     print("Invalid language, using default (zh)")
@@ -82,6 +88,9 @@ if lang not in ["en", "zh"]:
 
 
 def t(key: str, *args) -> str:
+    """
+    Translate a key with optional format arguments.
+    """
     if len(args) > 0:
         return tr[lang].get(key, "TODO: " + key).format(*args)
     return tr[lang].get(key, "TODO: " + key)

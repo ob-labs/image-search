@@ -1,12 +1,17 @@
 # coding: utf-8
+"""
+CLI helper to load images into OceanBase.
+"""
 import os
 import dotenv
 
+# Load environment variables for DB configuration
 dotenv.load_dotenv()
 
 from image_search.image_store import OBImageStore
 
 
+# Read connection and table configuration from env
 table_name = os.getenv("IMG_TABLE_NAME", "image_search")
 connection_args = {
     "user": os.getenv("DB_USER", ""),
@@ -16,6 +21,7 @@ connection_args = {
     "password": os.getenv("DB_PASSWORD", ""),
 }
 
+# Initialize the image store client
 store = OBImageStore(
     uri=f"{connection_args['host']}:{connection_args['port']}",
     **connection_args,
@@ -24,8 +30,10 @@ store = OBImageStore(
 
 
 if __name__ == "__main__":
+
+    # Parse CLI arguments for input directory and batch size
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Load images to OB")
     parser.add_argument(
         "--dir",
@@ -40,6 +48,8 @@ if __name__ == "__main__":
         help="Batch size for loading images",
     )
     args = parser.parse_args()
+
+    # Stream load progress until completion
     for _ in store.load_image_dir(args.dir, args.batch_size):
         pass
     print("Images loaded successfully!")
