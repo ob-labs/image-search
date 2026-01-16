@@ -1,11 +1,12 @@
 # coding: utf-8
 import os
 import tempfile
+from pathlib import Path
 import dotenv
 
 dotenv.load_dotenv()
 
-from connection import connection_args
+from image_search.connection import connection_args
 
 from fastapi import FastAPI, APIRouter, File, UploadFile
 from fastapi.responses import FileResponse
@@ -16,13 +17,15 @@ import fastapi_cdn_host
 
 app = FastAPI(title="Image Search App", version="0.1.0")
 fastapi_cdn_host.patch_docs(app)
-app.mount("/static", staticfiles.StaticFiles(directory="dist"), name="static")
+base_dir = Path(__file__).resolve().parents[2]
+dist_dir = base_dir / "dist"
+app.mount("/static", staticfiles.StaticFiles(directory=str(dist_dir)), name="static")
 router = APIRouter()
 table_name = os.getenv("IMG_TABLE_NAME", "image_search")
 image_dirs = {}
 
 
-from image_store import OBImageStore
+from image_search.image_store import OBImageStore
 
 store = OBImageStore(
     uri=f"{connection_args['host']}:{connection_args['port']}",
@@ -40,7 +43,7 @@ def replace_path(path):
 
 @app.get("/")
 async def read_index():
-    return FileResponse("dist/index.html")
+    return FileResponse(str(dist_dir / "index.html"))
 
 
 @router.post("/search")

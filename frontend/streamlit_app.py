@@ -1,17 +1,21 @@
 import os
 import time
+from pathlib import Path
 import dotenv
-import shutil
 
 dotenv.load_dotenv()
 
 import streamlit as st
-from image_store import OBImageStore
-from connection import connection_args
-from i18n import t
-from utils import extract_bundle
+from image_search.image_store import OBImageStore
+from image_search.connection import connection_args
+from image_search.i18n import t
+from image_search.utils import extract_bundle
 
-tmp_path = "tmp/temp.jpg"
+base_dir = Path(__file__).resolve().parents[1]
+data_dir = base_dir / "data"
+demo_dir = data_dir / "demo"
+tmp_dir = data_dir / "tmp"
+tmp_path = tmp_dir / "temp.jpg"
 
 if "archives" not in st.session_state:
     st.session_state.archives = {}
@@ -19,16 +23,16 @@ if "archives" not in st.session_state:
 st.set_page_config(
     layout="wide",
     page_title=t("title"),
-    page_icon="demo/ob-icon.png",
+    page_icon=str(demo_dir / "ob-icon.png"),
 )
 st.title(t("title"))
 st.caption(t("caption"))
-os.makedirs("tmp/archives", exist_ok=True)
-os.makedirs("tmp/extracted", exist_ok=True)
+os.makedirs(tmp_dir / "archives", exist_ok=True)
+os.makedirs(tmp_dir / "extracted", exist_ok=True)
 
 with st.sidebar:
     st.title(t("settings"))
-    st.logo("demo/logo.png")
+    st.logo(str(demo_dir / "logo.png"))
     st.subheader(t("search_setting"))
     table_name = st.text_input(
         t("table_name_input"),
@@ -45,12 +49,12 @@ with st.sidebar:
         type=["zip", "tar", "tar.gz", "bz2", "xz"],
     )
     if archive is not None and archive.name not in st.session_state.archives:
-        with open(os.path.join("tmp", "archives", archive.name), "wb") as f:
+        with open(tmp_dir / "archives" / archive.name, "wb") as f:
             f.write(archive.read())
             st.session_state.archives[archive.name] = True
             st.rerun()
 
-    archives = os.listdir(os.path.join("tmp", "archives"))
+    archives = os.listdir(tmp_dir / "archives")
     selected_archive = st.selectbox(
         t("image_archive"),
         help=t("image_archive_help"),
@@ -73,13 +77,13 @@ elif click_load:
     if not selected_archive:
         st.error(t("set_image_base_pls"))
     else:
-        source = os.path.join("tmp", "archives", selected_archive)
-        target = os.path.join("tmp", "extracted", selected_archive)
-        extract_bundle(source, target)
-        total = store.load_amount(target)
+        source = tmp_dir / "archives" / selected_archive
+        target = tmp_dir / "extracted" / selected_archive
+        extract_bundle(str(source), str(target))
+        total = store.load_amount(str(target))
         finished = 0
         bar = st.progress(0, text=t("images_loading"))
-        for _ in store.load_image_dir(target, table_name=table_name):
+        for _ in store.load_image_dir(str(target), table_name=table_name):
             finished += 1
             bar.progress(
                 finished / total,
@@ -105,7 +109,7 @@ elif table_exist:
             f.write(uploaded_image.read())
 
         col2.subheader(t("similar_images_header"))
-        results = store.search(tmp_path, limit=top_k, table_name=table_name)
+        results = store.search(str(tmp_path), limit=top_k, table_name=table_name)
         with col2:
             if len(results) == 0:
                 st.warning(t("no_similar_images"))

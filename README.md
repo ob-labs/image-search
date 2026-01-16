@@ -135,7 +135,7 @@ vi .env
 ### 4. Start the image search application
 
 ```bash
-poetry run streamlit run --server.runOnSave false image_search_ui.py
+poetry run streamlit run --server.runOnSave false frontend/streamlit_app.py
 ```
 
 ### 5. Process and store images
@@ -146,7 +146,7 @@ After opening the application interface, you can see the input box of "Image Bas
 
 After the image processing is completed, you will see the image upload operation bar at the top of the interface. You can upload an image to search for similar images. Once the image is uploaded, the application will search and return some of the most similar images in the database, and by default, the top 10 most similar images will be returned.
 
-![image_search_ui](./demo/image-search-demo.png)
+![image_search_ui](./data/demo/image-search-demo.png)
 
 ## FAQ
 

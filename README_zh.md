@@ -137,7 +137,7 @@ vi .env
 
 ```bash
 # 启动图像搜索应用界面
-poetry run streamlit run --server.runOnSave false image_search_ui.py
+poetry run streamlit run --server.runOnSave false frontend/streamlit_app.py
 ```
 
 ### 5. 处理并存储图像数据
@@ -148,7 +148,7 @@ poetry run streamlit run --server.runOnSave false image_search_ui.py
 
 在图片处理完成后，您将在界面中上方看到图片上传操作栏，您可上传一张图片用于搜索相似图片。上传图片后，应用程序将搜索并返回数据库中最相似的一些图片，默认返回最相似的前 10 张图片。
 
-![image_search_ui](./demo/image-search-demo.png)
+![image_search_ui](./data/demo/image-search-demo.png)
 
 ## 常见问题
 

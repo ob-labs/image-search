@@ -1,7 +1,7 @@
 import os
 from tqdm import tqdm
 from typing import Iterator
-from embeddings import ImageData, embed_img, load_imgs, load_amount
+from .embeddings import ImageData, embed_img, load_imgs, load_amount
 
 from pyobvector import (
     VECTOR,

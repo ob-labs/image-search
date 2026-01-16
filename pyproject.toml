@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["yuyi <yuyi.wsy@oceanbase.com>"]
 readme = "README.md"
+packages = [{ include = "image_search", from = "backend" }]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.9.7 || >3.9.7,<4.0"

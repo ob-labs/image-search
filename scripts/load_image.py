@@ -4,7 +4,7 @@ import dotenv
 
 dotenv.load_dotenv()
 
-from image_store import OBImageStore
+from image_search.image_store import OBImageStore
 
 
 table_name = os.getenv("IMG_TABLE_NAME", "image_search")
