@@ -7,3 +7,35 @@ tmp/**
 *.db
 !.gitkeep
 .DS_Store
+uv.lock
+
+# uv related files and directories
+.uv/
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+
+# Python compiled files
+*.py[cod]
+*$py.class
+*.so
+
+# Testing and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
