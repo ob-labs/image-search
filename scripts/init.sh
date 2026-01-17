@@ -110,12 +110,12 @@ echo "Environment variables loaded successfully."
 
 
 if [ "${REUSE_CURRENT_DB}" != "true" ]; then
-    sudo bash "$SCRIPT_DIR/init_docker.sh"
+    bash "$SCRIPT_DIR/init_docker.sh"
 fi
 
 # Create table
 echo "Creating database table..."
-if ! uv run python src/common/db.py create-table 2>&1; then
+if ! uv run python -m src.common.db create-table 2>&1; then
     echo "Failed to create table!"
     exit 1
 fi

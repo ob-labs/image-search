@@ -114,7 +114,7 @@ class OBImageStore:
         logger.info("Searching similar images for %s.", image_path)
         target_embedding = embed_img(image_path)
 
-        res = self.client.ann_search(
+        cursor_result = self.client.ann_search(
             table_name,
             vec_data=target_embedding,
             vec_column_name="embedding",
@@ -123,6 +123,9 @@ class OBImageStore:
             output_column_names=output_fields,
             with_dist=True,
         )
+
+        # Fetch all rows from cursor result
+        res = cursor_result.fetchall()
 
         # Map raw tuples into dictionaries
         logger.info("ANN search returned %s results.", len(res))

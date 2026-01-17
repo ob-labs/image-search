@@ -16,6 +16,22 @@ source "$PROJECT_ROOT/.env"
 set +a
 echo "Environment variables loaded successfully."
 
+# Ensure uv is available when running under sudo (PATH may be reset)
+if ! command -v uv &> /dev/null; then
+    if [ -n "${SUDO_USER:-}" ]; then
+        ORIGINAL_HOME="$(eval echo "~${SUDO_USER}")"
+        if [ -x "${ORIGINAL_HOME}/.local/bin/uv" ]; then
+            export PATH="${ORIGINAL_HOME}/.local/bin:${PATH}"
+        fi
+    fi
+fi
+if ! command -v uv &> /dev/null; then
+    echo "Error: uv not found in PATH. If you installed uv for your user, run:"
+    echo "  sudo -E bash scripts/init_docker.sh"
+    echo "or add uv to PATH (e.g., ~/.cargo/bin)."
+    exit 1
+fi
+
 # Check if Docker is available and running (only needed if not reusing current DB)
 
 if command -v docker &> /dev/null; then
@@ -36,27 +52,60 @@ fi
 
 # Download Docker images based on DB_STORE
 if [ "${DB_STORE}" = "seekdb" ]; then
-    echo "Downloading latest seekdb docker image..."
-    export ROOT_PASSWORD=${DB_PASSWORD}
-    sudo docker run --name seekdb -d -p 2881:2881 -p 2886:2886 oceanbase/seekdb
+    docker_name="seekdb"
+    # Check if container already exists
+    if sudo docker ps -a --format "{{.Names}}" | grep -q "^${docker_name}$"; then
+        echo "Container '${docker_name}' already exists."
+        if sudo docker ps --format "{{.Names}}" | grep -q "^${docker_name}$"; then
+            echo "Container is already running."
+        else
+            echo "Starting existing container..."
+            sudo docker start "${docker_name}"
+        fi
+    else
+        echo "Downloading latest seekdb docker image..."
+        export ROOT_PASSWORD=${DB_PASSWORD}
+        sudo docker run --name seekdb -e ROOT_PASSWORD=${DB_PASSWORD} -d -p 2881:2881 -p 2886:2886 oceanbase/seekdb
+    fi
 elif [ "${DB_STORE}" = "oceanbase" ]; then
-    echo "Downloading latest oceanbase-ce docker image..."
-    export OB_TENANT_PASSWORD=${DB_PASSWORD}
-    sudo docker run -p 2881:2881 --name oceanbase-ce -e MODE=normal -d oceanbase/oceanbase-ce
+    docker_name="oceanbase-ce"
+    # Check if container already exists
+    if sudo docker ps -a --format "{{.Names}}" | grep -q "^${docker_name}$"; then
+        echo "Container '${docker_name}' already exists."
+        if sudo docker ps --format "{{.Names}}" | grep -q "^${docker_name}$"; then
+            echo "Container is already running."
+        else
+            echo "Starting existing container..."
+            sudo docker start "${docker_name}"
+        fi
+    else
+        echo "Downloading latest oceanbase-ce docker image..."
+        export OB_TENANT_PASSWORD=${DB_PASSWORD}
+        sudo docker run -p 2881:2881 --name oceanbase-ce -e OB_TENANT_PASSWORD=${DB_PASSWORD} -e datafile_size=10G -d oceanbase/oceanbase-ce
+    fi
 else
     echo "Warning: Unknown DB_STORE value: ${DB_STORE}. Skipping docker image download."
 fi
 
 # Wait for download to complete
 echo "Waiting for docker image download to complete..."
-sleep 60s
+total=60
+for ((i=1; i<=total; i++)); do
+    percent=$((i * 100 / total))
+    filled=$((i * 50 / total))
+    empty=$((50 - filled))
+    bar=$(printf "%${filled}s" | tr ' ' '█')$(printf "%${empty}s" | tr ' ' '░')
+    printf "\r[${bar}] ${percent}%% (${i}/${total}s)"
+    sleep 1
+done
+echo ""
 
 # Check database connection
 echo "Checking database connection..."
 cd "$PROJECT_ROOT"
 
-# Run the database connection check
-if ! uv run python src/common/db.py check-connection 2>&1; then
+# Run the database connection check (use -m to enable relative imports)
+if ! uv run python -m src.common.db check-connection 2>&1; then
     echo "Database connection check failed!"
     echo "Please ensure that Docker is running properly."
     echo "Please wait for 60 seconds and rerun this script with sudo bash scripts/init_docker.sh."
