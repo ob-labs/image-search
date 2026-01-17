@@ -4,6 +4,11 @@ Simple i18n helper with built-in translation dictionary.
 
 import os
 
+from common.logger import get_logger
+
+# Logger for i18n helpers
+logger = get_logger(__name__)
+
 # Translation table keyed by language code
 tr = {
     "en": {
@@ -83,7 +88,7 @@ tr = {
 # Read UI language from env and fallback to zh
 lang = os.getenv("UI_LANG", "zh")
 if lang not in ["en", "zh"]:
-    print("Invalid language, using default (zh)")
+    logger.warning("Invalid language %s, using default (zh).", lang)
     lang = "zh"
 
 

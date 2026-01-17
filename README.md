@@ -37,13 +37,13 @@ python3 -m pip install uv
 If you are the first time to login to the machine provided by the workshop, you need to start the docker service with the following command:
 
 ```bash
-systemctl start docker
+sudo systemctl start docker
 ```
 
 And then, you can start an OceanBase docker container with the following command:
 
 ```bash
-docker run --ulimit stack=4294967296 --name=ob433 -e MODE=mini -e OB_MEMORY_LIMIT=8G -e OB_DATAFILE_SIZE=10G -e OB_CLUSTER_NAME=ailab2024 -p 127.0.0.1:2881:2881 -d quay.io/oceanbase/oceanbase-ce:4.3.3.0-100000142024101215
+sudo docker run --ulimit stack=4294967296 --name=ob433 -e MODE=mini -e OB_MEMORY_LIMIT=8G -e OB_DATAFILE_SIZE=10G -e OB_CLUSTER_NAME=ailab2024 -p 127.0.0.1:2881:2881 -d quay.io/oceanbase/oceanbase-ce:4.3.3.0-100000142024101215
 ```
 
 If the above command is executed successfully, you will see the following output:
@@ -57,7 +57,7 @@ af5b32e79dc2a862b5574d05a18c1b240dc5923f04435a0e0ec41d70d91a20ee
 After the container is started, you can check the bootstrap status of OceanBase with the following command:
 
 ```bash
-docker logs -f ob433
+sudo docker logs -f ob433
 ```
 
 The initialization will take about 2 ~ 3 minutes. When you see the following message (the bottom `boot success!` is essential), the bootstrap of OceanBase is complete:
@@ -141,7 +141,7 @@ vi .env
 ### 4. Start the image search application
 
 ```bash
-uv run streamlit run --server.runOnSave false frontend/streamlit_app.py
+uv run streamlit run --server.runOnSave false src/frontend/streamlit_app.py
 ```
 
 ### 5. Process and store images

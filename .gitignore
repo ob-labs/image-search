@@ -8,6 +8,7 @@ tmp/**
 !.gitkeep
 .DS_Store
 uv.lock
+data/tmp/**
 
 # uv related files and directories
 .uv/

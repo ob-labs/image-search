@@ -37,13 +37,13 @@ python3 -m pip install uv
 如果你是第一次登录动手实战营提供的机器，你需要通过以下命令启动 Docker 服务：
 
 ```bash
-systemctl start docker
+sudo systemctl start docker
 ```
 
 随后您可以使用以下命令启动一个 OceanBase docker 容器：
 
 ```bash
-docker run --ulimit stack=4294967296 --name=ob433 -e MODE=mini -e OB_MEMORY_LIMIT=8G -e OB_DATAFILE_SIZE=10G -e OB_CLUSTER_NAME=ailab2024 -p 127.0.0.1:2881:2881 -d quay.io/oceanbase/oceanbase-ce:4.3.3.0-100000142024101215
+sudo docker run --ulimit stack=4294967296 --name=ob433 -e MODE=mini -e OB_MEMORY_LIMIT=8G -e OB_DATAFILE_SIZE=10G -e OB_CLUSTER_NAME=ailab2024 -p 127.0.0.1:2881:2881 -d quay.io/oceanbase/oceanbase-ce:4.3.3.0-100000142024101215
 ```
 
 如果上述命令执行成功，将会打印容器 ID，如下所示：
@@ -57,7 +57,7 @@ af5b32e79dc2a862b5574d05a18c1b240dc5923f04435a0e0ec41d70d91a20ee
 容器启动后，您可以使用以下命令检查 OceanBase 数据库初始化状态：
 
 ```bash
-docker logs -f ob433
+sudo docker logs -f ob433
 ```
 
 初始化过程大约需要 2 ~ 3 分钟。当您看到以下消息（底部的 `boot success!` 是必须的）时，说明 OceanBase 数据库初始化完成：

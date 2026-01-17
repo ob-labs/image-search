@@ -2,30 +2,38 @@
 """
 FastAPI entrypoint that serves static assets and image search APIs.
 """
+
 import os
 import tempfile
 from pathlib import Path
-import dotenv
 
-# Load environment variables for DB and app initialization
-dotenv.load_dotenv()
-
-from image_search.connection import connection_args
-
-from fastapi import FastAPI, APIRouter, File, UploadFile
+import fastapi_cdn_host
+from dotenv import load_dotenv
+from fastapi import APIRouter, FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from starlette import staticfiles
-import fastapi_cdn_host
 
+from common.db import build_client
+from common.image_store import OBImageStore
+from common.logger import get_logger
+
+# Logger for backend app
+logger = get_logger(__name__)
+
+# Load environment variables for DB and app initialization
+load_dotenv()
+logger.info("Environment variables loaded for backend.")
 
 # Create the FastAPI app and patch docs to use CDN assets
 app = FastAPI(title="Image Search App", version="0.1.0")
 fastapi_cdn_host.patch_docs(app)
+logger.info("FastAPI app initialized.")
 
 # Resolve and mount the frontend build output as static assets
 base_dir = Path(__file__).resolve().parents[2]
 dist_dir = base_dir / "dist"
 app.mount("/static", staticfiles.StaticFiles(directory=str(dist_dir)), name="static")
+logger.info("Mounted static assets from %s.", dist_dir)
 
 # Create an API router and mount it under /api
 router = APIRouter()
@@ -36,15 +44,12 @@ table_name = os.getenv("IMG_TABLE_NAME", "image_search")
 # Track mounted image directories to avoid duplicate mounts
 image_dirs: dict[str, int] = {}
 
-
-from image_search.image_store import OBImageStore
-
 # Initialize the image vector store client
 store = OBImageStore(
-    uri=f"{connection_args['host']}:{connection_args['port']}",
-    **connection_args,
+    client=build_client(),
     table_name=table_name,
 )
+logger.info("Image store initialized for table '%s'.", table_name)
 
 
 def replace_path(path: str) -> str:
@@ -55,6 +60,7 @@ def replace_path(path: str) -> str:
     # Mount the directory the first time it appears
     if path not in image_dirs:
         image_dirs[path] = len(image_dirs) + 1
+        logger.info("Mounting image directory %s.", path)
         app.mount(
             f"/images/{image_dirs[path]}",
             staticfiles.StaticFiles(directory=path),
@@ -88,6 +94,7 @@ async def search_image(
     tf = tempfile.NamedTemporaryFile(suffix=file_type)
     tf.write(content)
     tf.flush()
+    logger.info("Received image %s for search (top_k=%s).", file.filename, top_k)
 
     # Search similar images in the vector store
     res = store.search(tf.name, limit=top_k)
@@ -97,6 +104,7 @@ async def search_image(
         file_path = os.path.abspath(r["file_path"])
         dst = os.path.dirname(file_path)
         r["file_path"] = replace_path(dst) + os.path.basename(file_path)
+    logger.info("Search completed with %s results.", len(res))
     return res
 
 

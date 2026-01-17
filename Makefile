@@ -21,7 +21,7 @@ clean:
 # Start the application
 start:
 	@echo "Starting image search application..."
-	@uv run streamlit run --server.runOnSave false frontend/streamlit_app.py
+	@uv run streamlit run --server.runOnSave false src/frontend/streamlit_app.py
 
 # Stop all processes
 stop:
