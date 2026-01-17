@@ -66,16 +66,6 @@ make stop
 make clean
 ```
 
-### 5. Process and store images
-
-After opening the application interface, you can see the input box of "Image Base" in the left sidebar. Fill in the absolute path of the image directory you prepared in it, and then click the "Load Images" button. The application will process and store these image data, and you will see the image processing progress on the interface.
-
-### 6. Search similar images
-
-After the image processing is completed, you will see the image upload operation bar at the top of the interface. You can upload an image to search for similar images. Once the image is uploaded, the application will search and return some of the most similar images in the database, and by default, the top 10 most similar images will be returned.
-
-![image_search_ui](./data/demo/image-search-demo.png)
-
 ## FAQ
 
 ### 1. What should I do if I encounter an error that libGL.so.1 cannot be found?
