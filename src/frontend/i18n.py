@@ -101,7 +101,7 @@ tr = {
         "table_name_input": "テーブル名",
         "table_name_help": "画像ベクトルなどを保存するテーブル名",
         "recall_number": "リコール数",
-        "recall_number_help": "返す類似画像の枚数",
+        "recall_number_help": "リコール（検索）する類似画像の枚数を指定してください",
         "vector_weight": "ベクトル重み",
         "vector_weight_help": "ベクトル検索の重み：0.0=テキストのみ、1.0=ベクトルのみ、0.7=推奨",
         "distance_threshold": "距離しきい値",
@@ -130,9 +130,9 @@ tr = {
         "file_path": "📂 ファイルパス:",
         "image_caption": "📝 説明:",
         "table_not_exist": "画像テーブル {} が存在しません。先に画像を読み込んでください",
-        "upload_image_archive": "画像アーカイブのアップロード",
-        "image_archive": "画像アーカイブ",
-        "image_archive_help": "アップロードされたアーカイブを選択し、「画像を読み込む」をクリックして一括処理します",
+        "upload_image_archive": "画像用圧縮ファイルのアップロード",
+        "image_archive": "画像用圧縮ファイル",
+        "image_archive_help": "アップロードされた圧縮ファイルを選択し、「画像を読み込む」をクリックして一括処理します",
     },
 }
 
