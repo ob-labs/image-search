@@ -35,6 +35,7 @@ connection_args = {
 cols = [
     Column("file_name", String(512), primary_key=True),
     Column("file_path", String(512), primary_key=True),
+    Column("caption", String(2048)),
     Column("embedding", VECTOR(512)),
 ]
 
@@ -42,7 +43,7 @@ cols = [
 output_fields = [
     "file_name",
     "file_path",
-
+    "caption",
     # "embedding",
 ]
 # -----------------------------------------------------------------------------
@@ -61,6 +62,7 @@ class ImageData(BaseModel):
 
     file_name: str = ""
     file_path: str = ""
+    caption: str = ""
     embedding: list[float]
 
 

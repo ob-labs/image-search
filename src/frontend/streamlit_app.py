@@ -105,11 +105,26 @@ def render_sidebar_logo(paths: AppPaths) -> None:
         st.logo(paths.logo_path)
 
 
-def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, bool, bool, str, bool]:
+def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, float, float, bool, bool, str, bool]:
     st.title(t("settings"))
     st.subheader(t("search_setting"))
     table_name = os.getenv("IMG_TABLE_NAME", "image_search")
     top_k = st.slider(t("recall_number"), 1, 30, 10, help=t("recall_number_help"))
+    vector_weight = st.slider(
+        t("vector_weight"),
+        min_value=0.0,
+        max_value=1.0,
+        value=0.7,
+        step=0.1,
+        help=t("vector_weight_help"),
+    )
+    distance_threshold = st.number_input(
+        t("distance_threshold"),
+        min_value=0.0,
+        value=0.6,
+        step=0.01,
+        help=t("distance_threshold_help"),
+    )
     show_distance = st.checkbox(t("show_distance"), value=True)
     show_file_path = st.checkbox(t("show_file_path"), value=True)
 
@@ -129,7 +144,7 @@ def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, bool, bool, str, b
         key="image_archive",
     )
     click_load = st.button(t("load_images"))
-    return table_name, top_k, show_distance, show_file_path, selected_archive, click_load
+    return table_name, top_k, vector_weight, distance_threshold, show_distance, show_file_path, selected_archive, click_load
 
 
 def load_images_from_archive(
@@ -163,6 +178,8 @@ def render_search_results(
     uploaded_image,
     table_name: str,
     top_k: int,
+    vector_weight: float,
+    distance_threshold: float,
     show_distance: bool,
     show_file_path: bool,
     tmp_path: Path,
@@ -170,13 +187,23 @@ def render_search_results(
     col1, col2 = st.columns(2)
     col1.subheader(t("uploaded_image_header"))
     col1.caption(t("uploaded_image_caption"))
-    col1.image(uploaded_image)
 
     with open(tmp_path, "wb") as f:
         f.write(uploaded_image.read())
 
+    # Generate caption for uploaded image
+    from common.embeddings import caption_img
+    caption = caption_img(str(tmp_path))
+    col1.write(f"{t('image_caption')} {caption}")
+    col1.image(uploaded_image)
+
     col2.subheader(t("similar_images_header"))
-    results = store.search(str(tmp_path), limit=top_k, table_name=table_name)
+    results = store.hybrid_search(
+        str(tmp_path),
+        limit=top_k,
+        vector_weight=vector_weight,
+        distance_threshold=distance_threshold,
+    )
     logger.info("Search returned %s results.", len(results))
     with col2:
         if len(results) == 0:
@@ -185,10 +212,11 @@ def render_search_results(
             tabs = st.tabs([t("image_no", i + 1) for i in range(len(results))])
             for res, tab in zip(results, tabs):
                 with tab:
-                    if show_distance:
+                    if show_distance and res.get("distance") is not None:
                         st.write(t("distance"), f"{res['distance']:.8f}")
                     if show_file_path:
                         st.write(t("file_path"), os.path.join(res["file_path"]))
+                    st.write(t("image_caption"), res.get("caption", ""))
                     st.image(res["file_path"])
 
 
@@ -203,6 +231,8 @@ def render_search_panel(
     store: OBImageStore,
     table_name: str,
     top_k: int,
+    vector_weight: float,
+    distance_threshold: float,
     show_distance: bool,
     show_file_path: bool,
     tmp_path: Path,
@@ -218,6 +248,8 @@ def render_search_panel(
             uploaded_image,
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             tmp_path,
@@ -237,6 +269,8 @@ def main() -> None:
         (
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             selected_archive,
@@ -257,6 +291,8 @@ def main() -> None:
             store,
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             paths.tmp_path,
