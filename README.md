@@ -28,6 +28,23 @@ Copy the `.env.example` file to `.env` and modify the configuration as needed.
 cp .env.example .env
 ```
 
+**Important Configuration:**
+
+- **API_KEY** (Required for text/hybrid search): API key for automatic image captioning
+  - Not required if using pure vector search only (vector weight = 1.0)
+  - Required when using text or hybrid search (vector weight < 1.0)
+  - Supports OpenAI, Qwen (Tongyi Qianwen), and other OpenAI-compatible services
+  - For Qwen API: Visit [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) to get an API Key
+- **BASE_URL**: API service endpoint (defaults to Qwen's service)
+- **MODEL**: Model name to use (defaults to `qwen-vl-max`)
+
+Example configuration (`.env`):
+```bash
+API_KEY=sk-your-api-key-here
+BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+MODEL=qwen-vl-max
+```
+
 ### 2. Initialize the environment
 
 This command will start the OceanBase database container and install all dependencies.

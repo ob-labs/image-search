@@ -28,6 +28,23 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 cp .env.example .env
 ```
 
+**重要配置项：**
+
+- **API_KEY**（全文/混合搜索必需）：用于图像自动描述功能的 API 密钥
+  - 如果只使用纯向量搜索（向量权重=1.0），则不需要配置
+  - 使用文本或混合搜索（向量权重<1.0）时必须配置
+  - 支持 OpenAI、Qwen（通义千问）等兼容 OpenAI API 的服务
+  - Qwen API 获取方式：访问 [阿里云 DashScope](https://dashscope.console.aliyun.com/apiKey) 获取 API Key
+- **BASE_URL**：API 服务地址（默认为 Qwen 的服务地址）
+- **MODEL**：使用的模型名称（默认为 `qwen-vl-max`）
+
+示例配置（`.env`）：
+```bash
+API_KEY=sk-your-api-key-here
+BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+MODEL=qwen-vl-max
+```
+
 ### 2. 初始化环境
 
 该命令将启动 OceanBase 数据库容器并安装所有依赖。
