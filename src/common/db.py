@@ -141,6 +141,12 @@ def create_table(table_name: str | None = None) -> None:
         vidx_params="distance=l2, type=hnsw, lib=vsag",
     )
 
+    # Create fulltext index for caption
+    logger.info("Creating fulltext index 'caption_idx' on table '%s'...", table_name)
+    client.perform_raw_text_sql(
+        f"ALTER TABLE {table_name} ADD FULLTEXT INDEX caption_idx (caption)"
+    )
+
     logger.info("Table '%s' created successfully!", table_name)
 
 
