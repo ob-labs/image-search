@@ -165,6 +165,32 @@ class EmbeddingEngine:
         _logger.info("Generated embedding with CLIP: %s", image_path)
         return features.squeeze(0).cpu().tolist()
 
+    def embed_text(self, text: str) -> list[float]:
+        """
+        Generate an embedding vector for the given text using CLIP.
+
+        Args:
+            text: Input text to embed.
+
+        Returns:
+            A list of floats representing the text embedding.
+
+        Raises:
+            RuntimeError: If CLIP model fails to load.
+        """
+        self._ensure_clip_loaded()
+
+        if self._clip_processor is None or self._clip_model is None:
+            raise RuntimeError("Failed to load CLIP model")
+
+        inputs = self._clip_processor(text=[text], return_tensors="pt", padding=True)
+        with torch.no_grad():
+            features = self._clip_model.get_text_features(**inputs)
+            features = features / features.norm(p=2, dim=-1, keepdim=True)
+
+        _logger.info("Generated text embedding with CLIP: %s", text[:50])
+        return features.squeeze(0).cpu().tolist()
+
     # -------------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------------
@@ -289,6 +315,21 @@ def embed_img(path: str) -> list[float]:
         A list of floats representing the image embedding.
     """
     return _get_default_engine().embed(path)
+
+
+def embed_text(text: str) -> list[float]:
+    """
+    Generate an embedding vector for the given text.
+
+    This is a convenience function using the default engine with CLIP.
+
+    Args:
+        text: Input text to embed.
+
+    Returns:
+        A list of floats representing the text embedding.
+    """
+    return _get_default_engine().embed_text(text)
 
 
 def caption_img(path: str) -> str:

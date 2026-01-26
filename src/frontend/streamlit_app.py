@@ -255,6 +255,60 @@ def render_search_panel(
             tmp_path,
         )
 
+    # Text search section
+    st.divider()
+    st.subheader(t("text_search_header"))
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        query_text = st.text_input(
+            label=t("text_search_label"),
+            placeholder=t("text_search_placeholder"),
+            label_visibility="collapsed",
+        )
+    with col2:
+        search_button = st.button(t("search_button"), use_container_width=True)
+
+    if search_button and query_text:
+        render_text_search_results(
+            store,
+            query_text,
+            table_name,
+            top_k,
+            show_file_path,
+        )
+    elif search_button and not query_text:
+        st.warning(t("text_search_empty_warning"))
+
+
+def render_text_search_results(
+    store: OBImageStore,
+    query_text: str,
+    table_name: str,
+    top_k: int,
+    show_file_path: bool,
+) -> None:
+    st.subheader(t("search_results_header"))
+    st.caption(f"{t('search_query')}: **{query_text}**")
+
+    # Use pure text search based on caption fulltext index
+    results = store.text_search(query_text, limit=top_k)
+    logger.info("Text search for '%s' returned %s results.", query_text, len(results))
+
+    if len(results) == 0:
+        st.warning(t("no_search_results"))
+    else:
+        # Use grid layout to display results
+        cols = st.columns(3)
+        for idx, res in enumerate(results):
+            with cols[idx % 3]:
+                with st.container(border=True):
+                    st.image(res["file_path"], use_container_width=True)
+                    st.caption(f"**{t('image_no', idx + 1)}**")
+                    st.write(f"{t('image_caption')} {res.get('caption', '')}")
+                    st.write(f"{t('text_score')} {res.get('text_score', 0):.4f}")
+                    if show_file_path:
+                        st.caption(f"{t('file_path')} {res['file_path']}")
+
 
 def main() -> None:
     paths = build_paths()
