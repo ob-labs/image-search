@@ -35,6 +35,7 @@ connection_args = {
 cols = [
     Column("file_name", String(512), primary_key=True),
     Column("file_path", String(512), primary_key=True),
+    Column("caption", String(2048)),
     Column("embedding", VECTOR(512)),
 ]
 
@@ -42,7 +43,7 @@ cols = [
 output_fields = [
     "file_name",
     "file_path",
-
+    "caption",
     # "embedding",
 ]
 # -----------------------------------------------------------------------------
@@ -61,6 +62,7 @@ class ImageData(BaseModel):
 
     file_name: str = ""
     file_path: str = ""
+    caption: str = ""
     embedding: list[float]
 
 
@@ -137,6 +139,12 @@ def create_table(table_name: str | None = None) -> None:
         index_name="img_embedding_idx",
         column_names=["embedding"],
         vidx_params="distance=l2, type=hnsw, lib=vsag",
+    )
+
+    # Create fulltext index for caption
+    logger.info("Creating fulltext index 'caption_idx' on table '%s'...", table_name)
+    client.perform_raw_text_sql(
+        f"ALTER TABLE {table_name} ADD FULLTEXT INDEX caption_idx (caption)"
     )
 
     logger.info("Table '%s' created successfully!", table_name)

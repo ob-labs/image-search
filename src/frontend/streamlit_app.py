@@ -105,11 +105,26 @@ def render_sidebar_logo(paths: AppPaths) -> None:
         st.logo(paths.logo_path)
 
 
-def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, bool, bool, str, bool]:
+def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, float, float, bool, bool, str, bool]:
     st.title(t("settings"))
     st.subheader(t("search_setting"))
     table_name = os.getenv("IMG_TABLE_NAME", "image_search")
     top_k = st.slider(t("recall_number"), 1, 30, 10, help=t("recall_number_help"))
+    vector_weight = st.slider(
+        t("vector_weight"),
+        min_value=0.0,
+        max_value=1.0,
+        value=0.7,
+        step=0.1,
+        help=t("vector_weight_help"),
+    )
+    distance_threshold = st.number_input(
+        t("distance_threshold"),
+        min_value=0.0,
+        value=0.6,
+        step=0.01,
+        help=t("distance_threshold_help"),
+    )
     show_distance = st.checkbox(t("show_distance"), value=True)
     show_file_path = st.checkbox(t("show_file_path"), value=True)
 
@@ -129,7 +144,7 @@ def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, bool, bool, str, b
         key="image_archive",
     )
     click_load = st.button(t("load_images"))
-    return table_name, top_k, show_distance, show_file_path, selected_archive, click_load
+    return table_name, top_k, vector_weight, distance_threshold, show_distance, show_file_path, selected_archive, click_load
 
 
 def load_images_from_archive(
@@ -158,11 +173,37 @@ def load_images_from_archive(
     st.rerun()
 
 
+def render_results_tabs(
+    results: list,
+    show_distance: bool,
+    show_file_path: bool,
+) -> None:
+    """Render search results in tabs (shared by image and text search)"""
+    if len(results) == 0:
+        st.warning(t("no_similar_images"))
+    else:
+        tabs = st.tabs([t("image_no", i + 1) for i in range(len(results))])
+        for res, tab in zip(results, tabs):
+            with tab:
+                # Show distance for vector search
+                if show_distance and res.get("distance") is not None:
+                    st.write(t("distance"), f"{res['distance']:.8f}")
+                # Show text score for text search
+                if res.get("text_score") is not None:
+                    st.write(t("text_score"), f"{res.get('text_score', 0):.4f}")
+                if show_file_path:
+                    st.write(t("file_path"), os.path.join(res["file_path"]))
+                st.write(t("image_caption"), res.get("caption", ""))
+                st.image(res["file_path"])
+
+
 def render_search_results(
     store: OBImageStore,
     uploaded_image,
     table_name: str,
     top_k: int,
+    vector_weight: float,
+    distance_threshold: float,
     show_distance: bool,
     show_file_path: bool,
     tmp_path: Path,
@@ -170,26 +211,26 @@ def render_search_results(
     col1, col2 = st.columns(2)
     col1.subheader(t("uploaded_image_header"))
     col1.caption(t("uploaded_image_caption"))
-    col1.image(uploaded_image)
 
     with open(tmp_path, "wb") as f:
         f.write(uploaded_image.read())
 
+    # Generate caption for uploaded image
+    from common.embeddings import caption_img
+    caption = caption_img(str(tmp_path))
+    col1.write(f"{t('image_caption')} {caption}")
+    col1.image(uploaded_image)
+
     col2.subheader(t("similar_images_header"))
-    results = store.search(str(tmp_path), limit=top_k, table_name=table_name)
+    results = store.hybrid_search(
+        str(tmp_path),
+        limit=top_k,
+        vector_weight=vector_weight,
+        distance_threshold=distance_threshold,
+    )
     logger.info("Search returned %s results.", len(results))
     with col2:
-        if len(results) == 0:
-            st.warning(t("no_similar_images"))
-        else:
-            tabs = st.tabs([t("image_no", i + 1) for i in range(len(results))])
-            for res, tab in zip(results, tabs):
-                with tab:
-                    if show_distance:
-                        st.write(t("distance"), f"{res['distance']:.8f}")
-                    if show_file_path:
-                        st.write(t("file_path"), os.path.join(res["file_path"]))
-                    st.image(res["file_path"])
+        render_results_tabs(results, show_distance, show_file_path)
 
 
 def init_store() -> OBImageStore:
@@ -203,25 +244,98 @@ def render_search_panel(
     store: OBImageStore,
     table_name: str,
     top_k: int,
+    vector_weight: float,
+    distance_threshold: float,
     show_distance: bool,
     show_file_path: bool,
     tmp_path: Path,
 ) -> None:
-    uploaded_image = st.file_uploader(
-        label=t("image_upload_label"),
-        type=["jpg", "jpeg", "png"],
-        help=t("image_upload_help"),
-    )
-    if uploaded_image is not None:
+    # Image search section
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        uploaded_image = st.file_uploader(
+            label=t("image_upload_label"),
+            type=["jpg", "jpeg", "png"],
+            help=t("image_upload_help"),
+        )
+    with col2:
+        # Add empty label to align with file_uploader
+        st.write("")  # Spacer to align with file_uploader label
+        # Always show search button, but disable it when no image uploaded
+        image_search_button = st.button(
+            t("image_search_button"),
+            key="image_search_btn",
+            use_container_width=True,
+            disabled=(uploaded_image is None),
+        )
+    
+    if image_search_button and uploaded_image is not None:
         render_search_results(
             store,
             uploaded_image,
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             tmp_path,
         )
+
+    # Text search section
+    st.divider()
+    st.subheader(t("text_search_header"))
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        query_text = st.text_input(
+            label=t("text_search_label"),
+            placeholder=t("text_search_placeholder"),
+            label_visibility="collapsed",
+        )
+    with col2:
+        text_search_button = st.button(
+            t("search_button"),
+            key="text_search_btn",
+            use_container_width=True,
+        )
+
+    if text_search_button and query_text:
+        render_text_search_results(
+            store,
+            query_text,
+            table_name,
+            top_k,
+            show_distance,
+            show_file_path,
+        )
+    elif text_search_button and not query_text:
+        st.warning(t("text_search_empty_warning"))
+
+
+def render_text_search_results(
+    store: OBImageStore,
+    query_text: str,
+    table_name: str,
+    top_k: int,
+    show_distance: bool,
+    show_file_path: bool,
+) -> None:
+    col1, col2 = st.columns(2)
+    
+    # Left column: show query text
+    col1.subheader(t("text_search_query_header"))
+    col1.caption(t("text_search_query_caption"))
+    col1.write(f"**{query_text}**")
+
+    # Right column: show search results
+    col2.subheader(t("search_results_header"))
+    
+    # Use pure text search based on caption fulltext index
+    results = store.text_search(query_text, limit=top_k)
+    logger.info("Text search for '%s' returned %s results.", query_text, len(results))
+
+    with col2:
+        render_results_tabs(results, show_distance, show_file_path)
 
 
 def main() -> None:
@@ -237,6 +351,8 @@ def main() -> None:
         (
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             selected_archive,
@@ -257,6 +373,8 @@ def main() -> None:
             store,
             table_name,
             top_k,
+            vector_weight,
+            distance_threshold,
             show_distance,
             show_file_path,
             paths.tmp_path,

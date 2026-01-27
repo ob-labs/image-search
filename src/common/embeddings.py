@@ -165,6 +165,32 @@ class EmbeddingEngine:
         _logger.info("Generated embedding with CLIP: %s", image_path)
         return features.squeeze(0).cpu().tolist()
 
+    def embed_text(self, text: str) -> list[float]:
+        """
+        Generate an embedding vector for the given text using CLIP.
+
+        Args:
+            text: Input text to embed.
+
+        Returns:
+            A list of floats representing the text embedding.
+
+        Raises:
+            RuntimeError: If CLIP model fails to load.
+        """
+        self._ensure_clip_loaded()
+
+        if self._clip_processor is None or self._clip_model is None:
+            raise RuntimeError("Failed to load CLIP model")
+
+        inputs = self._clip_processor(text=[text], return_tensors="pt", padding=True)
+        with torch.no_grad():
+            features = self._clip_model.get_text_features(**inputs)
+            features = features / features.norm(p=2, dim=-1, keepdim=True)
+
+        _logger.info("Generated text embedding with CLIP: %s", text[:50])
+        return features.squeeze(0).cpu().tolist()
+
     # -------------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------------
@@ -291,6 +317,71 @@ def embed_img(path: str) -> list[float]:
     return _get_default_engine().embed(path)
 
 
+def embed_text(text: str) -> list[float]:
+    """
+    Generate an embedding vector for the given text.
+
+    This is a convenience function using the default engine with CLIP.
+
+    Args:
+        text: Input text to embed.
+
+    Returns:
+        A list of floats representing the text embedding.
+    """
+    return _get_default_engine().embed_text(text)
+
+
+def caption_img(path: str) -> str:
+    """
+    Generate image caption using OpenAI-compatible API (Qwen/OpenAI/Azure etc).
+
+    Args:
+        path: Path to the image file.
+
+    Returns:
+        A text description of the image, or error message if generation fails.
+    """
+    import base64
+
+    api_key = os.getenv("API_KEY")
+    base_url = os.getenv("BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    model = os.getenv("MODEL", "qwen-vl-max")
+
+    if not api_key:
+        return "[Error: API_KEY not set]"
+
+    try:
+        with open(path, "rb") as f:
+            b64_image = base64.b64encode(f.read()).decode("utf-8")
+
+        # Initialize OpenAI client
+        import openai
+        client = openai.OpenAI(api_key=api_key, base_url=base_url)
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is the main object in this image? Answer in 2-3 words only."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}}
+                ]
+            }],
+            temperature=0.2,
+        )
+        content = response.choices[0].message.content
+        if content is None:
+            _logger.warning("No caption generated for %s", path)
+            return "[No caption]"
+        caption = content.strip()
+        _logger.info("Generated caption for %s: %s", path, caption)
+        return caption
+    except Exception as e:
+        _logger.error("Failed to generate caption for %s: %s", path, e)
+        return f"[Error: {str(e)}]"
+
+
 def load_amount(dir_path: str) -> int:
     """
     Count how many valid image files exist under the directory.
@@ -312,15 +403,17 @@ def load_imgs(dir_path: str) -> Iterator[ImageData]:
         dir_path: Root directory to scan.
 
     Yields:
-        ImageData with file metadata and embedding.
+        ImageData with file metadata, caption, and embedding.
     """
     engine = _get_default_engine()
     scanner = ImageScanner(dir_path)
 
     for file_path in scanner.scan():
         embedding = engine.embed(file_path)
+        caption = caption_img(file_path)
         yield ImageData(
             file_name=os.path.basename(file_path),
             file_path=file_path,
+            caption=caption,
             embedding=embedding,
         )
