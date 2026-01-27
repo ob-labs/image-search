@@ -1,6 +1,6 @@
 # 图像搜索应用
 
-[English Edition](./README.md)
+[English Edition](./README.md) | [日本語版](./README_ja.md)
 
 ## 介绍
 

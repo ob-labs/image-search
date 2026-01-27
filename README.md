@@ -1,6 +1,6 @@
 # Image Search Application
 
-[中文版](./README_zh.md)
+[中文版](./README_zh.md) | [日本語版](./README_ja.md)
 
 ## Introduction
 
