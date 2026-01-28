@@ -1,12 +1,69 @@
 # Image Search Application
 
-[中文版](./README_zh.md)
+[中文版](./README_zh.md) | [日本語版](./README_ja.md)
 
 ## Introduction
 
 With the vector storage and retrieval capabilities of OceanBase, we can build an image search application. The application will embed images into vectors and store them in the database. Users can upload images, and the application will search and return the most similar images in the database.
 
 Note: You need to prepare some images yourself and update the `Image Base` configuration to the open UI. If you don't have any images available locally, you can download datasets online, such as the [Animals-10](https://www.kaggle.com/datasets/alessiocorrado99/animals10/data) dataset on Kaggle.
+
+## System Architecture
+
+The project consists of 4 core components:
+
+- **Frontend (Streamlit UI)**: Responsible for image uploading, parameter configuration (e.g., top_k, vector_weight, distance_threshold), and result display.
+- **Business Layer (OBImageStore)**: Encapsulates the core logic for dataset loading, multi-dimensional retrieval, and result fusion, coordinating all modules to complete search tasks.
+- **Feature and Semantic Generation**:
+  - **Image Vector (Embedding)**: Generates image vectors for similarity search (prioritizes Towhee, falls back to local CLIP if needed).
+  - **Image Description (Caption)**: Generates short text descriptions for images via an OpenAI-compatible interface for full-text and hybrid search.
+- **Storage Layer (OceanBase / seekdb)**: Uses seekdb containers as the vector database by default; maintains both **vector indexes** and **caption full-text indexes**.
+
+Below is a step-by-step explanation of "Dataset Loading / Image Search / Text Search".
+
+### 1) Dataset Loading
+
+Usage: Select an image archive in the sidebar and click **Load Images**.
+
+Dataset Loading Process:
+
+1. **Decompression and Scanning**: Unzips the uploaded archive and scans for image files (supports jpg, jpeg, png formats).
+2. **Step-by-Step Processing**:
+   - **Read Image** and extract basic information.
+   - **Generate Vector**: Creates an embedding for the image, used for subsequent similarity search.
+   - **Generate Description**: Creates a short text description (Caption) for the image, used for subsequent text or hybrid search.
+3. **Infrastructural Preparation**: Ensures the database table and its associated **vector index** (HNSW) and **full-text index** are ready, which is a prerequisite for efficient searching.
+4. **Bulk Ingestion**: Batch writes image filenames, paths, descriptions, and vector features into OceanBase / seekdb.
+
+Additional Notes:
+
+- **make init creates tables/indexes**: The initialization script creates the table and the vector + caption full-text indexes; it skips if the table already exists.
+- **Load process handles table creation as a fallback**: Even without running the creation command first, the business layer will check for table existence during the first ingestion and create it if missing.
+
+### 2) Image Search
+
+Usage: Upload an image and click search.
+
+Search Process:
+
+1. **Upload Image**: The frontend uploads the image as the search input.
+2. **Generate Query Features**:
+   - **Vector Feature**: Extracts the image's vector for similarity retrieval against images in the dataset.
+   - **Text Feature**: Generates a text description (Caption) for the image for full-text retrieval in the database.
+3. **Dual-Path Recall**:
+   - **Vector Recall**: Performs similarity search via the vector index, supporting filtering of irrelevant results through `distance_threshold`.
+   - **Text Recall**: Matches via the caption full-text index to recall semantically relevant images.
+4. **Fusion and Ranking**: Normalizes results from both paths and performs weighted ranking based on the user-defined `vector_weight` to output the final Top K results.
+
+### 3) Text Search
+
+Usage: Enter a text query and click search.
+
+Search Process:
+
+1. **Enter Text**: User enters search keywords.
+2. **Full-Text Retrieval**: The system leverages OceanBase / seekdb's full-text retrieval capabilities to match and recall images based on the Caption field.
+3. **Result Ranking**: Ranks results based on text relevance scores and outputs the final Top K results.
 
 ## Prerequisites
 
