@@ -364,11 +364,18 @@ def caption_img(path: str) -> str:
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "What is the main object in this image? Answer in 2-3 words only."},
+                    {
+                        "type": "text",
+                        "text": (
+                            "Identify the main object category/type in this image. "
+                            "Answer with 1-2 words describing the species or object type only (e.g., 'dog', 'car', 'tree', 'building'). "
+                            "Focus on WHAT it is, not how it looks."
+                        ),
+                    },
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}}
                 ]
             }],
-            temperature=0.2,
+            temperature=0.1,
         )
         content = response.choices[0].message.content
         if content is None:
