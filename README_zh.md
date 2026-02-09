@@ -15,7 +15,7 @@
 - **前端（Streamlit UI）**：负责图片上传、参数配置（如 top_k、vector_weight、distance_threshold）和结果展示。
 - **业务层（OBImageStore）**：封装了数据集加载、多维检索以及结果融合等核心逻辑，协调各模块完成图搜任务。
 - **特征与语义生成**：
-  - **图片向量（Embedding）**：对图片生成向量用于相似度检索（优先使用 Towhee，失败时回退到本地 CLIP）。
+  - **图片向量（Embedding）**：通过 DashScope Multimodal-Embedding API 为图片生成向量，用于相似度检索。
   - **图片描述（Caption）**：通过 OpenAI 兼容接口为图片生成短文本描述，用于全文检索与混合检索。
 - **存储层（OceanBase / seekdb）**：默认使用 seekdb 容器作为向量数据库能力承载；同时维护**向量索引**与**caption 全文索引**。
 
@@ -62,7 +62,53 @@
 3. **结果排序**：根据文本相关性得分进行排序，输出最终的 Top K 结果。
 
 
-## 准备工作
+## 快速启动（推荐）
+
+使用 Docker Compose 一键启动应用和数据库。
+
+### 1. 配置环境变量
+
+```bash
+cd docker
+cp .env.example .env
+```
+
+编辑 `docker/.env` 文件，配置以下必需项：
+
+```bash
+# 图片向量生成 API Key（必需）
+EMBEDDING_API_KEY=sk-your-dashscope-key
+
+# 图片描述生成 API Key（混合/文本搜索时必需，纯向量搜索可不配置）
+LLM_API_KEY=sk-your-dashscope-key
+
+# 数据库选择（seekdb 或 oceanbase）
+DB_STORE=seekdb
+```
+
+### 2. 启动服务
+
+```bash
+docker compose up -d
+```
+
+### 3. 访问应用
+
+打开浏览器访问 `http://localhost:8501`，在侧边栏上传图片压缩包加载数据集，然后即可开始搜索。
+
+### 4. 停止服务
+
+```bash
+docker compose down
+```
+
+---
+
+## 本地开发部署
+
+如果您希望在本地环境直接运行（不使用 Docker），可按以下步骤操作。
+
+### 准备工作
 
 1. 安装 [uv](https://github.com/astral-sh/uv) 作为依赖管理工具。
 
@@ -71,8 +117,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 2. 确保系统中 `make` 命令可用。
-
-## 应用搭建步骤
 
 ### 1. 配置环境变量
 
@@ -84,17 +128,30 @@ cp .env.example .env
 
 **重要配置项：**
 
-- **API_KEY**（全文/混合搜索必需）：用于图像自动描述功能的 API 密钥
+- **EMBEDDING_API_KEY**（必需）：用于图片向量生成的 API 密钥
+  - 访问 [阿里云 DashScope](https://dashscope.console.aliyun.com/apiKey) 获取 API Key
+- **LLM_API_KEY**（混合/文本搜索必需）：用于图片描述生成的 API 密钥
   - 如果只使用纯向量搜索（向量权重=1.0），则不需要配置
-  - 使用文本或混合搜索（向量权重<1.0）时必须配置
   - 支持 OpenAI、Qwen（通义千问）等兼容 OpenAI API 的服务
-  - Qwen API 获取方式：访问 [阿里云 DashScope](https://dashscope.console.aliyun.com/apiKey) 获取 API Key
-- **BASE_URL**：API 服务地址（默认为 Qwen 的服务地址）
-- **MODEL**：使用的模型名称（默认为 `qwen-vl-max`）
+
+其他配置项（通常使用默认值即可）：
+
+- **EMBEDDING_TYPE**：Embedding 后端类型（默认 `dashscope`）
+- **EMBEDDING_MODEL**：Embedding 模型名称（默认 `tongyi-embedding-vision-plus`）
+- **EMBEDDING_DIMENSION**：向量维度（默认 `1024`）
+- **BASE_URL**：图片描述 API 服务地址（默认为 Qwen 的服务地址）
+- **MODEL**：图片描述使用的模型名称（默认为 `qwen-vl-max`）
 
 示例配置（`.env`）：
 ```bash
-API_KEY=sk-your-api-key-here
+# 必需配置
+EMBEDDING_API_KEY=sk-your-dashscope-key
+LLM_API_KEY=sk-your-dashscope-key
+
+# 可选配置（使用默认值）
+EMBEDDING_TYPE=dashscope
+EMBEDDING_MODEL=tongyi-embedding-vision-plus
+EMBEDDING_DIMENSION=1024
 BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
@@ -139,22 +196,6 @@ make clean
 
 ## 常见问题
 
-### 1. 遇到找不到 libGL.so.1 文件的报错怎么办？
-
-如果您在运行应用 UI 时遇到了 `ImportError: libGL.so.1: cannot open shared object file` 的报错信息，可参考[该帖子](https://stackoverflow.com/questions/55313610/importerror-libgl-so-1-cannot-open-shared-object-file-no-such-file-or-directo)解决。
-
-在 CentOS/RedHat 操作系统中，执行以下命令：
-
-```bash
-sudo yum install mesa-libGL -y
-```
-
-在 Ubuntu/Debian 操作系统中，执行以下命令：
-
-```bash
-sudo apt-get install libgl1
-```
-
-### 2. Docker 安装遇到问题怎么办？
+### 1. Docker 安装遇到问题怎么办？
 
 如果您在安装 Docker 或启动 OceanBase 容器时遇到任何问题，可以访问 [OceanBase OBI](https://www.oceanbase.com/obi) 寻求帮助。
