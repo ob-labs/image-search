@@ -4,11 +4,11 @@ WORKDIR /app
 
 ENV UV_VERSION=0.8.9
 
-RUN pip install --no-cache-dir uv==${UV_VERSION} -i https://pypi.tuna.tsinghua.edu.cn/simple
-# RUN pip install --no-cache-dir uv==${UV_VERSION}
+# RUN pip install --no-cache-dir uv==${UV_VERSION} -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install --no-cache-dir uv==${UV_VERSION}
 
 # if you located in China, you can use aliyun mirror to speed up
-RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+# RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
@@ -18,8 +18,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
 # if you located in China, you can use aliyun mirror to speed up
-ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-# ENV UV_INDEX_URL=https://pypi.org/simple/
+# ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ENV UV_HTTP_TIMEOUT=300
 
 RUN uv sync && \
@@ -30,7 +29,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # if you located in China, you can use aliyun mirror to speed up
-RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+# RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
