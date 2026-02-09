@@ -25,8 +25,4 @@ start:
 
 # Stop all processes
 stop:
-	@echo "Stopping all processes..."
-	@pkill -f "streamlit run" || true
-	@docker ps -q | xargs -r docker stop || true
-	@docker ps -aq | xargs -r docker rm || true
-	@echo "All processes stopped."
+	@bash scripts/stop.sh

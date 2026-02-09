@@ -27,20 +27,23 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     if [ "${REUSE_CURRENT_DB}" != "true" ]; then
         echo "REUSE_CURRENT_DB is false, stopping Docker containers..."
         
-        # Determine docker_name based on DB_STORE
+        # Determine docker_name based on DB_STORE (must match init_docker.sh)
         if [ "${DB_STORE}" = "seekdb" ]; then
-            docker_name="seekdb"
+            docker_name="image-search-seekdb"
         elif [ "${DB_STORE}" = "oceanbase" ]; then
-            docker_name="oceanbase-ce"
+            docker_name="image-search-oceanbase"
         else
             echo "Warning: Unknown DB_STORE value: ${DB_STORE}. Skipping docker stop."
             echo "All processes stopped."
             exit 0
         fi
         
-        # Stop the specific docker container
-        if sudo docker ps --format "{{.Names}}" | grep -q "^${docker_name}$"; then
+        # Stop the specific docker container (try without sudo first, then with sudo)
+        if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${docker_name}$"; then
             echo "Stopping Docker container: ${docker_name}"
+            docker stop "${docker_name}" || true
+        elif sudo docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${docker_name}$"; then
+            echo "Stopping Docker container (sudo): ${docker_name}"
             sudo docker stop "${docker_name}" || true
         else
             echo "Docker container '${docker_name}' is not running."
@@ -49,10 +52,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
         echo "REUSE_CURRENT_DB is true, skipping Docker container stop."
     fi
 else
-    echo "Warning: .env file not found. Stopping all Docker containers..."
-    # Fallback: stop all docker containers if .env is not found
-    sudo docker ps -q | xargs -r sudo docker stop || true
-    sudo docker ps -aq | xargs -r sudo docker rm || true
+    echo "Warning: .env file not found. Skipping Docker container stop."
 fi
 
 echo "All processes stopped."
