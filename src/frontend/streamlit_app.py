@@ -282,34 +282,34 @@ def render_search_panel(
             tmp_path,
         )
 
-    # Text search section
-    st.divider()
-    st.subheader(t("text_search_header"))
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        query_text = st.text_input(
-            label=t("text_search_label"),
-            placeholder=t("text_search_placeholder"),
-            label_visibility="collapsed",
-        )
-    with col2:
-        text_search_button = st.button(
-            t("search_button"),
-            key="text_search_btn",
-            use_container_width=True,
-        )
+    # Text search section (commented out - no longer exposed to users)
+    # st.divider()
+    # st.subheader(t("text_search_header"))
+    # col1, col2 = st.columns([4, 1])
+    # with col1:
+    #     query_text = st.text_input(
+    #         label=t("text_search_label"),
+    #         placeholder=t("text_search_placeholder"),
+    #         label_visibility="collapsed",
+    #     )
+    # with col2:
+    #     text_search_button = st.button(
+    #         t("search_button"),
+    #         key="text_search_btn",
+    #         use_container_width=True,
+    #     )
 
-    if text_search_button and query_text:
-        render_text_search_results(
-            store,
-            query_text,
-            table_name,
-            top_k,
-            show_distance,
-            show_file_path,
-        )
-    elif text_search_button and not query_text:
-        st.warning(t("text_search_empty_warning"))
+    # if text_search_button and query_text:
+    #     render_text_search_results(
+    #         store,
+    #         query_text,
+    #         table_name,
+    #         top_k,
+    #         show_distance,
+    #         show_file_path,
+    #     )
+    # elif text_search_button and not query_text:
+    #     st.warning(t("text_search_empty_warning"))
 
 
 def render_text_search_results(
