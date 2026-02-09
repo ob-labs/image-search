@@ -4,11 +4,11 @@ WORKDIR /app
 
 ENV UV_VERSION=0.8.9
 
-# RUN pip install --no-cache-dir uv==${UV_VERSION} -i https://pypi.tuna.tsinghua.edu.cn/simple
-RUN pip install --no-cache-dir uv==${UV_VERSION}
+RUN pip install --no-cache-dir uv==${UV_VERSION} -i https://pypi.tuna.tsinghua.edu.cn/simple
+# RUN pip install --no-cache-dir uv==${UV_VERSION}
 
 # if you located in China, you can use aliyun mirror to speed up
-# RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
@@ -18,15 +18,11 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
 # if you located in China, you can use aliyun mirror to speed up
-# ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-
+ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+# ENV UV_INDEX_URL=https://pypi.org/simple/
 ENV UV_HTTP_TIMEOUT=300
-# Install deps, then:
-# - Replace torch with CPU-only version (Towhee's CLIP operator needs torch)
-# - Remove torchvision/transformers (only used by CLIP fallback, not needed in Docker)
+
 RUN uv sync && \
-    uv pip uninstall torchvision transformers && \
-    uv pip install torch --index-url https://download.pytorch.org/whl/cpu && \
     rm -rf /root/.cache/uv /root/.cache/pip
 
 FROM python:3.12-slim
@@ -34,33 +30,18 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # if you located in China, you can use aliyun mirror to speed up
-# RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl \
-        libgl1 \
-        libglib2.0-0 && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Towhee downloads operators at runtime and uses pip to install their deps
-# if you located in China, you can use tsinghua mirror to speed up
-# RUN python -m ensurepip && pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
-RUN python -m ensurepip && pip install --no-cache-dir --upgrade pip
-
 COPY src ./src
 COPY data ./data
 COPY .streamlit ./.streamlit
-
-# Pre-download embedding model (must match the pipeline used in src/common/embeddings.py)
-ENV HF_ENDPOINT=https://hf-mirror.com
-RUN python -c "from towhee import AutoPipes; \
-               p = AutoPipes.pipeline('text_image_embedding'); \
-               print('Embedding model downloaded successfully')" && \
-    pip cache purge 2>/dev/null || true
 
 RUN mkdir -p /tmp/image-search
 

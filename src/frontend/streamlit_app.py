@@ -118,10 +118,13 @@ def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, float, float, bool
         step=0.1,
         help=t("vector_weight_help"),
     )
+    import math
+    embedding_dim = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+    default_threshold = round(0.6 * math.sqrt(embedding_dim / 512), 2)
     distance_threshold = st.number_input(
         t("distance_threshold"),
         min_value=0.0,
-        value=0.6,
+        value=default_threshold,
         step=0.01,
         help=t("distance_threshold_help"),
     )
