@@ -15,7 +15,7 @@ OceanBase のベクトル保存および検索機能を活用することで、�
 - **フロントエンド（Streamlit UI）**：画像のアップロード、パラメータ設定（top_k、vector_weight、distance_thresholdなど）、および結果の表示を担当します。
 - **アプリケーション層（OBImageStore）**：データセットの読み込み、多次元検索、および結果の融合に関するコアロジックをカプセル化し、検索タスクを完了するために各モジュールを調整します。
 - **特徴量とセマンティック情報の抽出・生成**：
-  - **画像ベクトル（Embedding）**：類似度検索用の画像ベクトルを生成します（Towheeを優先し、必要に応じてローカルのCLIPにフォールバックします）。
+  - **画像ベクトル（Embedding）**：DashScope Multimodal-Embedding API を介して画像ベクトルを生成し、類似度検索に使用します。
   - **画像説明（Caption）**：全文検索およびハイブリッド検索用に、OpenAI互換インターフェースを介して画像の内容を説明する短いテキストを生成します。
 - **ストレージ層（OceanBase / seekdb）**：デフォルトで seekdb コンテナをベクトルデータベースとして使用します。**ベクトルインデックス**と**キャプション全文インデックス**の両方を同時に維持します。
 
@@ -65,7 +65,57 @@ OceanBase のベクトル保存および検索機能を活用することで、�
 2. **全文検索**：システムは OceanBase / seekdb の全文検索機能を活用し、Caption フィールドに基づいて画像を照合し、リコールします。
 3. **結果のランキング**：テキストの関連性スコアに基づいて結果をランク付けし、最終的な Top K 結果を出力します。
 
-## 準備
+## クイックスタート（推奨）
+
+Docker Compose を使用してアプリケーションとデータベースを一括起動します。
+
+### 1. 環境変数の設定
+
+```bash
+cd docker
+cp .env.example .env
+```
+
+`docker/.env` ファイルを編集し、以下の必須項目を設定します：
+
+```bash
+# 画像埋め込み API Key（必須）
+EMBEDDING_API_KEY=sk-your-dashscope-key
+
+# 画像キャプション API Key（ハイブリッド/テキスト検索時に必須、純粋なベクトル検索では不要）
+LLM_API_KEY=sk-your-dashscope-key
+
+# データベース選択（seekdb または oceanbase）
+DB_STORE=seekdb
+```
+
+### 2. サービスの起動
+
+```bash
+# seekdb を使用（デフォルト、メモリ使用量が少ない）
+docker compose --profile seekdb up -d
+
+# または oceanbase を使用
+docker compose --profile oceanbase up -d
+```
+
+### 3. アプリケーションへのアクセス
+
+ブラウザで `http://localhost:8501` にアクセスし、サイドバーで画像の圧縮ファイルをアップロードしてデータセットを読み込み、検索を開始できます。
+
+### 4. サービスの停止
+
+```bash
+docker compose down
+```
+
+---
+
+## ローカル開発デプロイ
+
+Docker を使用せずにローカル環境で直接実行する場合は、以下の手順に従ってください。
+
+### 準備
 
 1. 依存関係管理ツールとして [uv](https://github.com/astral-sh/uv) をインストールします。
 
@@ -74,8 +124,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 2. システムで `make` コマンドが利用可能であることを確認してください。
-
-## アプリケーションの構築手順
 
 ### 1. 環境変数の設定
 
@@ -87,17 +135,30 @@ cp .env.example .env
 
 **重要な設定項目：**
 
-- **API_KEY**（全文検索/ハイブリッド検索に必須）：画像自動キャプション機能用の API キー
-  - 純粋なベクトル検索（ベクトル重み=1.0）のみを使用する場合は設定不要です。
-  - テキスト検索またはハイブリッド検索（ベクトル重み<1.0）を使用する場合は必須です。
-  - OpenAI、Qwen（通義千問）など、OpenAI API 互換のサービスをサポートしています。
-  - Qwen API の取得方法：[Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) から API Key を取得してください。
-- **BASE_URL**：API サービスのベース URL（デフォルトは Qwen のエンドポイント）
-- **MODEL**：使用するモデル名（デフォルトは `qwen-vl-max`）
+- **EMBEDDING_API_KEY**（必須）：画像埋め込み生成用の API キー
+  - [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) から API Key を取得してください
+- **LLM_API_KEY**（ハイブリッド/テキスト検索に必須）：画像キャプション生成用の API キー
+  - 純粋なベクトル検索（ベクトル重み=1.0）のみを使用する場合は設定不要です
+  - OpenAI、Qwen（通義千問）など、OpenAI API 互換のサービスをサポートしています
+
+その他の設定項目（通常はデフォルト値を使用）：
+
+- **EMBEDDING_TYPE**：埋め込みバックエンドタイプ（デフォルト `dashscope`）
+- **EMBEDDING_MODEL**：埋め込みモデル名（デフォルト `tongyi-embedding-vision-plus`）
+- **EMBEDDING_DIMENSION**：ベクトル次元（デフォルト `1024`）
+- **BASE_URL**：画像キャプション API サービスエンドポイント（デフォルトは Qwen のサービス）
+- **MODEL**：画像キャプションモデル名（デフォルト `qwen-vl-max`）
 
 設定例（`.env`）：
 ```bash
-API_KEY=sk-your-api-key-here
+# 必須設定
+EMBEDDING_API_KEY=sk-your-dashscope-key
+LLM_API_KEY=sk-your-dashscope-key
+
+# オプション設定（デフォルト値を使用）
+EMBEDDING_TYPE=dashscope
+EMBEDDING_MODEL=tongyi-embedding-vision-plus
+EMBEDDING_DIMENSION=1024
 BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
@@ -120,7 +181,7 @@ make start
 
 アプリケーション画面が開いたら、左側のサイドバーにある "Image Base" 入力欄に、用意した画像ディレクトリの絶対パスを入力し、"画像を読み込む" ボタンをクリックしてください。アプリケーションが画像を処理して保存し、画面に進捗が表示されます。
 
-### 5. 画像検索の使用
+### 5. 画像検索を使用
 
 画像の処理が完了すると、画面中央上部にアップロード欄が表示されます。検索したい画像をアップロードすると、データベース内から最も類似した画像（デフォルトで上位10枚）が返されます。
 
@@ -142,22 +203,6 @@ make clean
 
 ## よくある質問
 
-### 1. libGL.so.1 が見つからないというエラーが出る場合は？
-
-UI 実行時に `ImportError: libGL.so.1: cannot open shared object file` というエラーが発生した場合は、[こちらのスレッド](https://stackoverflow.com/questions/55313610/importerror-libgl-so-1-cannot-open-shared-object-file-no-such-file-or-directo) を参照して解決してください。
-
-CentOS/RedHat 系の場合：
-
-```bash
-sudo yum install mesa-libGL -y
-```
-
-Ubuntu/Debian 系の場合：
-
-```bash
-sudo apt-get install libgl1
-```
-
-### 2. Docker のインストールで問題が発生した場合は？
+### 1. Docker のインストールで問題が発生した場合は？
 
 Docker のインストールや OceanBase コンテナの起動で問題が発生した場合は、[OceanBase OBI](https://www.oceanbase.com/obi) にてサポートを確認してください。

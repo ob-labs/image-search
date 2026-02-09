@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Environment files
+*.env*
+!.env.example
+
+# Python
+.venv
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+
+# uv
+.uv/
+
+# Testing and coverage
+test
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Runtime data (mounted as volume, not baked into image)
+data/tmp/
+tmp/
+logs/
+*.db
+
+# Docker
+docker
+
+# OS
+.DS_Store
+
+# Docs (keep README.md for uv sync)
+*.md
+!README.md
+LICENSE
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+NOTICE
+mine.md
+speech.md

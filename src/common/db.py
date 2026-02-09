@@ -36,7 +36,7 @@ cols = [
     Column("file_name", String(512), primary_key=True),
     Column("file_path", String(512), primary_key=True),
     Column("caption", String(2048)),
-    Column("embedding", VECTOR(512)),
+    Column("embedding", VECTOR(1024)),
 ]
 
 # Columns to return in ANN search results
