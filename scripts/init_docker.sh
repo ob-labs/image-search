@@ -52,7 +52,7 @@ fi
 
 # Download Docker images based on DB_STORE
 if [ "${DB_STORE}" = "seekdb" ]; then
-    docker_name="seekdb"
+    docker_name="image-search-seekdb"
     # Check if container already exists
     if sudo docker ps -a --format "{{.Names}}" | grep -q "^${docker_name}$"; then
         echo "Container '${docker_name}' already exists."
@@ -65,10 +65,10 @@ if [ "${DB_STORE}" = "seekdb" ]; then
     else
         echo "Downloading latest seekdb docker image..."
         export ROOT_PASSWORD=${DB_PASSWORD}
-        sudo docker run --name seekdb -e ROOT_PASSWORD=${DB_PASSWORD} -d -p 2881:2881 -p 2886:2886 oceanbase/seekdb
+        sudo docker run --name "${docker_name}" -e ROOT_PASSWORD=${DB_PASSWORD} -d -p 2881:2881 -p 2886:2886 oceanbase/seekdb
     fi
 elif [ "${DB_STORE}" = "oceanbase" ]; then
-    docker_name="oceanbase-ce"
+    docker_name="image-search-oceanbase"
     # Check if container already exists
     if sudo docker ps -a --format "{{.Names}}" | grep -q "^${docker_name}$"; then
         echo "Container '${docker_name}' already exists."
@@ -81,7 +81,7 @@ elif [ "${DB_STORE}" = "oceanbase" ]; then
     else
         echo "Downloading latest oceanbase-ce docker image..."
         export OB_TENANT_PASSWORD=${DB_PASSWORD}
-        sudo docker run -p 2881:2881 --name oceanbase-ce -e OB_TENANT_PASSWORD=${DB_PASSWORD} -e datafile_size=10G -d oceanbase/oceanbase-ce
+        sudo docker run -p 2881:2881 --name "${docker_name}" -e OB_TENANT_PASSWORD=${DB_PASSWORD} -e datafile_size=10G -d oceanbase/oceanbase-ce
     fi
 else
     echo "Warning: Unknown DB_STORE value: ${DB_STORE}. Skipping docker image download."
