@@ -73,8 +73,10 @@ cp .env.example .env
 # 画像埋め込み API Key（必須）
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# 画像キャプション API Key（ハイブリッド/全文検索モードで必須、ベクトルモードでは不要）
-VLM_API_KEY=sk-your-dashscope-key
+# 画像キャプション VLM API Key（ハイブリッド/全文検索モードで必須、ベクトルモードでは不要）
+# OpenAI 互換の VLM プロバイダで利用可能
+VLM_API_KEY=sk-your-vlm-key
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # データベース選択（seekdb または oceanbase）
 DB_STORE=seekdb
@@ -144,7 +146,7 @@ cp .env.example .env
 ```bash
 # 必須設定
 EMBEDDING_API_KEY=sk-your-dashscope-key
-VLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-vlm-key
 
 # オプション設定（デフォルト値を使用）
 EMBEDDING_TYPE=dashscope

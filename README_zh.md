@@ -72,8 +72,10 @@ cp .env.example .env
 # 图片向量生成 API Key（必需）
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# 图片描述生成 API Key（混合/文本搜索时必需，纯向量搜索可不配置）
-VLM_API_KEY=sk-your-dashscope-key
+# 图片描述 VLM API Key（混合/全文检索模式必需，向量模式可不配置）
+# 支持任何 OpenAI 兼容的 VLM 服务提供方
+VLM_API_KEY=sk-your-vlm-key
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # 数据库选择（seekdb 或 oceanbase）
 DB_STORE=seekdb
@@ -139,7 +141,7 @@ cp .env.example .env
 ```bash
 # 必需配置
 EMBEDDING_API_KEY=sk-your-dashscope-key
-VLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-vlm-key
 
 # 可选配置（使用默认值）
 EMBEDDING_TYPE=dashscope

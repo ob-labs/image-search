@@ -73,8 +73,10 @@ Edit `docker/.env` file and configure the required settings:
 # Image embedding API Key (required)
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# Image captioning API Key (required for hybrid/full-text mode, optional for vector mode)
-VLM_API_KEY=sk-your-dashscope-key
+# Image captioning VLM API key (required for hybrid/full-text mode, optional for vector mode)
+# Works with any OpenAI-compatible VLM provider.
+VLM_API_KEY=sk-your-vlm-key
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # Database selection (seekdb or oceanbase)
 DB_STORE=seekdb
@@ -144,7 +146,7 @@ Example configuration (`.env`):
 ```bash
 # Required configuration
 EMBEDDING_API_KEY=sk-your-dashscope-key
-VLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-vlm-key
 
 # Optional configuration (use default values)
 EMBEDDING_TYPE=dashscope

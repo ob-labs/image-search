@@ -60,7 +60,7 @@ else
     echo "Python version check passed: $PYTHON_VERSION"
 fi
 
-# Check system memory (at least 8GB)
+# Check system memory (at least 4GB)
 echo "Checking system memory..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
@@ -71,7 +71,7 @@ else
     TOTAL_MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
 fi
 if [ -z "$TOTAL_MEM_GB" ] || [ "$TOTAL_MEM_GB" -lt 4 ]; then
-    echo "Error: System memory is insufficient. Required: at least 8GB, Current: ${TOTAL_MEM_GB}GB"
+    echo "Error: System memory is insufficient. Required: at least 4GB, Current: ${TOTAL_MEM_GB}GB"
     exit 1
 fi
 echo "System memory check passed: ${TOTAL_MEM_GB}GB"
