@@ -12,14 +12,14 @@ Note: You need to prepare some images yourself and update the `Image Base` confi
 
 The project consists of 4 core components:
 
-- **Frontend (Streamlit UI)**: Responsible for image uploading, parameter configuration (e.g., top_k, vector_weight, distance_threshold), and result display.
+- **Frontend (Streamlit UI)**: Responsible for image uploading, parameter configuration (e.g., top_k, search mode, distance_threshold), and result display.
 - **Business Layer (OBImageStore)**: Encapsulates the core logic for dataset loading, multi-dimensional retrieval, and result fusion, coordinating all modules to complete search tasks.
 - **Feature and Semantic Generation**:
   - **Image Vector (Embedding)**: Generates image vectors via DashScope Multimodal-Embedding API for similarity search.
   - **Image Description (Caption)**: Generates short text descriptions for images via an OpenAI-compatible interface for full-text and hybrid search.
 - **Storage Layer (OceanBase / seekdb)**: Uses seekdb containers as the vector database by default; maintains both **vector indexes** and **caption full-text indexes**.
 
-Below is a step-by-step explanation of "Dataset Loading / Image Search / Text Search".
+Below is a step-by-step explanation of "Dataset Loading / Image Search" (the standalone text-search UI is currently not exposed).
 
 ### 1) Dataset Loading
 
@@ -50,20 +50,11 @@ Search Process:
 2. **Generate Query Features**:
    - **Vector Feature**: Extracts the image's vector for similarity retrieval against images in the dataset.
    - **Text Feature**: Generates a text description (Caption) for the image for full-text retrieval in the database.
-3. **Dual-Path Recall**:
-   - **Vector Recall**: Performs similarity search via the vector index, supporting filtering of irrelevant results through `distance_threshold`.
-   - **Text Recall**: Matches via the caption full-text index to recall semantically relevant images.
-4. **Fusion and Ranking**: Normalizes results from both paths and performs weighted ranking based on the user-defined `vector_weight` to output the final Top K results.
-
-### 3) Text Search
-
-Usage: Enter a text query and click search.
-
-Search Process:
-
-1. **Enter Text**: User enters search keywords.
-2. **Full-Text Retrieval**: The system leverages OceanBase / seekdb's full-text retrieval capabilities to match and recall images based on the Caption field.
-3. **Result Ranking**: Ranks results based on text relevance scores and outputs the final Top K results.
+3. **Mode-based recall and ranking**:
+   - **Full-text mode**: Recalls results only from the caption full-text index.
+   - **Hybrid mode**: Uses both vector recall and full-text recall, then fuses/ranks results with pyseekdb native `hybrid_search` (RRF).
+   - **Vector mode**: Uses vector similarity search only, and supports filtering by `distance_threshold`.
+4. **Return Top K**: Outputs final Top K results.
 
 ## Quick Start (Recommended)
 
@@ -82,7 +73,7 @@ Edit `docker/.env` file and configure the required settings:
 # Image embedding API Key (required)
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# Image captioning API Key (required for hybrid/text search, optional for pure vector search)
+# Image captioning API Key (required for hybrid/full-text mode, optional for vector mode)
 LLM_API_KEY=sk-your-dashscope-key
 
 # Database selection (seekdb or oceanbase)
@@ -137,8 +128,8 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY** (Required): API key for image embedding generation
   - Visit [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) to get an API Key
-- **LLM_API_KEY** (Required for hybrid/text search): API key for image captioning
-  - Not required if using pure vector search only (vector weight = 1.0)
+- **LLM_API_KEY** (Required for hybrid/full-text mode): API key for image captioning
+  - Not required if using vector mode only
   - Supports OpenAI, Qwen (Tongyi Qianwen), and other OpenAI-compatible services
 
 Other configuration items (usually use default values):

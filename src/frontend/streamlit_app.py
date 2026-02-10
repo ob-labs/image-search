@@ -110,14 +110,15 @@ def render_sidebar_inputs(paths: AppPaths) -> tuple[str, int, float, float, bool
     st.subheader(t("search_setting"))
     table_name = os.getenv("IMG_TABLE_NAME", "image_search")
     top_k = st.slider(t("recall_number"), 1, 30, 10, help=t("recall_number_help"))
-    vector_weight = st.slider(
-        t("vector_weight"),
-        min_value=0.0,
-        max_value=1.0,
-        value=0.7,
-        step=0.1,
-        help=t("vector_weight_help"),
+    _mode_labels = [t("search_mode_text"), t("search_mode_hybrid"), t("search_mode_vector")]
+    _mode_weights = {_mode_labels[0]: 0.0, _mode_labels[1]: 0.5, _mode_labels[2]: 1.0}
+    selected_mode = st.select_slider(
+        t("search_mode"),
+        options=_mode_labels,
+        value=_mode_labels[1],
+        help=t("search_mode_help"),
     )
+    vector_weight = _mode_weights[selected_mode]
     import math
     embedding_dim = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
     default_threshold = round(0.6 * math.sqrt(embedding_dim / 512), 2)
@@ -364,7 +365,7 @@ def main() -> None:
 
     store = init_store()
 
-    table_exist = store.client.check_table_exists(table_name)
+    table_exist = store.client.has_collection(table_name)
     if click_load:
         if not selected_archive:
             st.error(t("set_image_base_pls"))

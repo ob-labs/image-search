@@ -6,12 +6,12 @@ authors = [
     {name = "oceanbase", email = "open_oceanbase@oceanbase.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "dashscope>=1.20.0,<2.0.0",
     "streamlit>=1.39.0,<2.0.0",
     "python-dotenv>=1.0.1,<2.0.0",
-    "pyobvector>=0.1.6,<1.0.0",
+    "pyseekdb>=1.1.0,<2.0.0",
     "fastapi-cdn-host>=0.9.1,<1.0.0",
     "fastapi>=0.115.12,<1.0.0",
     "uvicorn[standard]>=0.30.0,<1.0.0",

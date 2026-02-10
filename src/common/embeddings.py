@@ -10,7 +10,7 @@ import base64
 import os
 import re
 from http import HTTPStatus
-from typing import FrozenSet, Iterator, Optional
+from typing import Any, FrozenSet, Iterator, Optional, cast
 
 from .db import ImageData
 from .logger import get_logger
@@ -92,8 +92,13 @@ class EmbeddingEngine:
     # DashScope Backend
     # -------------------------------------------------------------------------
 
+    _MAX_RETRIES = 3
+    _RETRY_BACKOFF = 2  # seconds; doubles each retry
+
     def _embed_image_dashscope(self, image_path: str) -> list[float]:
         """Generate image embedding via DashScope Multimodal-Embedding API."""
+        import time
+
         import dashscope
         from dashscope import MultiModalEmbedding
 
@@ -105,21 +110,44 @@ class EmbeddingEngine:
             ext = "jpeg"
         data_uri = f"data:image/{ext};base64,{b64_image}"
 
-        _logger.info("Generating image embedding via DashScope: %s", image_path)
-        resp = MultiModalEmbedding.call(
-            model=self._model,
-            input=[{"image": data_uri}],
-            dimension=self._dimension,
-        )
+        last_error = None
+        for attempt in range(1, self._MAX_RETRIES + 1):
+            _logger.info(
+                "Generating image embedding via DashScope (attempt %d/%d): %s",
+                attempt,
+                self._MAX_RETRIES,
+                image_path,
+            )
+            image_input = cast(Any, [{"image": data_uri}])
+            resp = MultiModalEmbedding.call(
+                model=self._model,
+                input=image_input,
+                dimension=self._dimension,
+            )
 
-        if resp.status_code != HTTPStatus.OK:
+            if resp.status_code == HTTPStatus.OK:
+                embedding = resp.output["embeddings"][0]["embedding"]
+                _logger.info(
+                    "Generated image embedding (%d dims) for %s",
+                    len(embedding),
+                    image_path,
+                )
+                return embedding
+
             error_msg = getattr(resp, "message", str(resp))
-            _logger.error("DashScope embedding failed: %s", error_msg)
-            raise RuntimeError(f"DashScope embedding failed: {error_msg}")
+            last_error = error_msg
+            _logger.warning(
+                "DashScope embedding attempt %d failed: %s",
+                attempt,
+                error_msg,
+            )
+            if attempt < self._MAX_RETRIES:
+                wait = self._RETRY_BACKOFF * (2 ** (attempt - 1))
+                _logger.info("Retrying in %ds...", wait)
+                time.sleep(wait)
 
-        embedding = resp.output["embeddings"][0]["embedding"]
-        _logger.info("Generated image embedding (%d dims) for %s", len(embedding), image_path)
-        return embedding
+        _logger.error("DashScope embedding failed after %d attempts: %s", self._MAX_RETRIES, last_error)
+        raise RuntimeError(f"DashScope embedding failed after {self._MAX_RETRIES} attempts: {last_error}")
 
     def _embed_text_dashscope(self, text: str) -> list[float]:
         """Generate text embedding via DashScope Multimodal-Embedding API."""
@@ -129,9 +157,10 @@ class EmbeddingEngine:
         dashscope.api_key = self._api_key
 
         _logger.info("Generating text embedding via DashScope: %s", text[:50])
+        text_input = cast(Any, [{"text": text}])
         resp = MultiModalEmbedding.call(
             model=self._model,
-            input=[{"text": text}],
+            input=text_input,
             dimension=self._dimension,
         )
 

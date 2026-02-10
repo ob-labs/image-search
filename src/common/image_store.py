@@ -1,19 +1,34 @@
 """
-OceanBase image vector store wrapper.
+OceanBase image vector store wrapper (pyseekdb).
 """
 
-from typing import Any, Iterable, Iterator, Optional, Sequence
+from typing import Any, Iterable, Iterator, Optional
 
-from pyobvector import ObVecClient
-from sqlalchemy import func
 from tqdm import tqdm
 
-from .db import ImageData, cols, output_fields
+from .db import (
+    ImageData,
+    get_or_create_collection,
+)
 from .embeddings import embed_img, load_imgs, load_amount
 from .logger import get_logger
 
 # Logger for image store operations
 logger = get_logger(__name__)
+
+# Separator for building composite IDs from file_name + file_path
+_ID_SEP = "|"
+
+
+def _make_composite_id(file_name: str, file_path: str) -> str:
+    """Build a single string ID from the composite primary key."""
+    return f"{file_name}{_ID_SEP}{file_path}"
+
+
+def _split_composite_id(composite_id: str) -> tuple[str, str]:
+    """Recover file_name and file_path from a composite ID."""
+    parts = composite_id.split(_ID_SEP, 1)
+    return parts[0], parts[1] if len(parts) > 1 else ""
 
 
 class OBImageStore:
@@ -23,57 +38,68 @@ class OBImageStore:
 
     _DEFAULT_TABLE_NAME = "image_search"
     _DEFAULT_BATCH_SIZE = 320
-    _DEFAULT_QUERY_TIMEOUT = 100000000
+
     def __init__(
         self,
-        client: ObVecClient,
+        client,
         table_name: str = _DEFAULT_TABLE_NAME,
     ):
         self.client = client
         self.table_name = table_name
+        # Cache for Collection objects keyed by name
+        self._collections: dict[str, Any] = {}
 
-    def _ensure_table(self, table_name: str) -> None:
-        if self.client.check_table_exists(table_name):
-            return
-        logger.info("Table '%s' missing; creating schema.", table_name)
-        self.client.create_table(table_name, columns=cols)
-        self._create_ann_index(table_name)
-
-    def _create_ann_index(self, table_name: str) -> None:
-        logger.info("Creating ANN index for table '%s'.", table_name)
-        self.client.create_index(
-            table_name,
-            is_vec_index=True,
-            index_name="img_embedding_idx",
-            column_names=["embedding"],
-            vidx_params="distance=l2, type=hnsw, lib=vsag",
-        )
-        # Create fulltext index for caption
-        logger.info("Creating fulltext index for caption on table '%s'.", table_name)
-        self.client.perform_raw_text_sql(
-            f"ALTER TABLE {table_name} ADD FULLTEXT INDEX caption_idx (caption)"
-        )
-
-    def _set_query_timeout(self, timeout: int) -> None:
-        self.client.perform_raw_text_sql(f"SET ob_query_timeout={timeout}")
+    def _get_collection(self, collection_name: str):
+        """Get or create a collection, with local caching."""
+        if collection_name not in self._collections:
+            self._collections[collection_name] = get_or_create_collection(
+                self.client, collection_name
+            )
+        return self._collections[collection_name]
 
     def _insert_batches(
         self,
-        table_name: str,
+        collection_name: str,
         rows: Iterable[ImageData],
         batch_size: int,
     ) -> Iterator[None]:
-        batch: list[dict[str, Any]] = []
+        collection = self._get_collection(collection_name)
+        batch_ids: list[str] = []
+        batch_embeddings: list[list[float]] = []
+        batch_metadatas: list[dict[str, Any]] = []
+        batch_documents: list[str] = []
+
         for img in rows:
-            batch.append(img.model_dump())
+            composite_id = _make_composite_id(img.file_name, img.file_path)
+            batch_ids.append(composite_id)
+            batch_embeddings.append(img.embedding)
+            batch_metadatas.append(
+                {"file_name": img.file_name, "file_path": img.file_path}
+            )
+            batch_documents.append(img.caption)
             yield
-            if len(batch) == batch_size:
-                self.client.upsert(table_name, batch)
+            if len(batch_ids) == batch_size:
+                collection.upsert(
+                    ids=batch_ids,
+                    embeddings=batch_embeddings,
+                    metadatas=batch_metadatas,
+                    documents=batch_documents,
+                )
                 logger.info("Upserted batch of %s images.", batch_size)
-                batch = []
-        if batch:
-            self.client.upsert(table_name, batch)
-            logger.info("Upserted final batch of %s images .", len(batch))
+                batch_ids, batch_embeddings, batch_metadatas, batch_documents = (
+                    [],
+                    [],
+                    [],
+                    [],
+                )
+        if batch_ids:
+            collection.upsert(
+                ids=batch_ids,
+                embeddings=batch_embeddings,
+                metadatas=batch_metadatas,
+                documents=batch_documents,
+            )
+            logger.info("Upserted final batch of %s images.", len(batch_ids))
 
     def load_amount(self, dir_path: str) -> int:
         """
@@ -89,11 +115,11 @@ class OBImageStore:
         table_name: Optional[str] = None,
     ) -> Iterator:
         """
-        Load images from a directory, creating table/index if missing.
+        Load images from a directory, creating collection if missing.
         """
         table_name = table_name or self.table_name
-        self._ensure_table(table_name)
-        self._set_query_timeout(self._DEFAULT_QUERY_TIMEOUT)
+        # Ensure collection exists
+        self._get_collection(table_name)
         total = load_amount(dir_path)
         logger.info(
             "Loading images from %s with batch size %s (total=%s).",
@@ -104,6 +130,10 @@ class OBImageStore:
         rows = tqdm(load_imgs(dir_path), total=total)
         yield from self._insert_batches(table_name, rows, batch_size)
 
+    # -------------------------------------------------------------------------
+    # Search methods
+    # -------------------------------------------------------------------------
+
     def search(
         self,
         image_path: str,
@@ -111,149 +141,61 @@ class OBImageStore:
         table_name: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """
-        Search similar images by embedding distance.
+        Search similar images by embedding distance (vector-only).
         """
         table_name = table_name or self.table_name
+        collection = self._get_collection(table_name)
 
-        # Embed the target image for ANN search
         logger.info("Searching similar images for %s.", image_path)
         target_embedding = embed_img(image_path)
 
-        cursor_result = self.client.ann_search(
-            table_name,
-            vec_data=target_embedding,
-            vec_column_name="embedding",
-            topk=limit,
-            distance_func=func.l2_distance,
-            output_column_names=output_fields,
-            with_dist=True,
+        results = collection.query(
+            query_embeddings=[target_embedding],
+            n_results=limit,
+            include=["metadatas", "documents"],
         )
 
-        # Fetch all rows from cursor result
-        res = cursor_result.fetchall()
+        ids = results.get("ids", [[]])[0]
+        metadatas = results.get("metadatas", [[]])[0]
+        documents = results.get("documents", [[]])[0]
+        distances = results.get("distances", [[]])[0]
 
-        # Map raw tuples into dictionaries
-        logger.info("ANN search returned %s results.", len(res))
-        return self._format_search_results(res)
+        logger.info("ANN search returned %s results.", len(ids))
+        return self._format_query_results(ids, metadatas, documents, distances)
 
-    def _format_search_results(
+    def text_search(
         self,
-        rows: Sequence[Sequence[Any]],
+        query_text: str,
+        limit: int = 50,
+        table_name: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        return [
-            {
-                "file_name": row[0],
-                "file_path": row[1],
-                "caption": row[2],
-                "distance": row[3],
-            }
-            for row in rows
-        ]
-
-    def text_search(self, query_text: str, limit: int = 50) -> list[dict[str, Any]]:
         """
-        Full-text search based on caption using MATCH...AGAINST.
+        Full-text search based on caption via collection.get + $contains.
 
         Args:
             query_text: Text query for searching captions.
             limit: Maximum number of results to return.
+            table_name: Optional collection name override.
 
         Returns:
-            List of matching images with text scores.
+            List of matching images.
         """
-        # Escape single quotes in query text
-        escaped_query = query_text.replace("'", "''")
-        sql = f"""
-            SELECT file_name, file_path, caption,
-                   MATCH(caption) AGAINST('{escaped_query}' IN NATURAL LANGUAGE MODE) as text_score
-            FROM {self.table_name}
-            WHERE MATCH(caption) AGAINST('{escaped_query}' IN NATURAL LANGUAGE MODE)
-            ORDER BY text_score DESC
-            LIMIT {limit}
-        """
+        table_name = table_name or self.table_name
+        collection = self._get_collection(table_name)
+
         logger.info("Performing text search with query: %s", query_text)
-        results = self.client.perform_raw_text_sql(sql)
-        return [
-            {
-                "file_name": r[0],
-                "file_path": r[1],
-                "caption": r[2],
-                "text_score": float(r[3]),
-            }
-            for r in results
-        ]
+        results = collection.get(
+            where_document={"$contains": query_text},
+            limit=limit,
+            include=["metadatas", "documents"],
+        )
 
-    def _fuse_results(
-        self,
-        vector_results: list[dict[str, Any]],
-        text_results: list[dict[str, Any]],
-        vector_weight: float,
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        """
-        Normalize scores and fuse results with weighted sum.
+        ids = results.get("ids", [])
+        metadatas = results.get("metadatas", [])
+        documents = results.get("documents", [])
 
-        Args:
-            vector_results: Results from vector search.
-            text_results: Results from text search.
-            vector_weight: Weight for vector search (0.0-1.0).
-            limit: Maximum number of results to return.
-
-        Returns:
-            Fused and sorted results.
-        """
-        # Build ID mapping using file_name + file_path as composite key
-        def make_id(item: dict) -> tuple:
-            return (item["file_name"], item["file_path"])
-
-        # Normalize vector distances to similarities [0, 1]
-        vec_dict = {make_id(r): r["distance"] for r in vector_results}
-        if vec_dict:
-            max_dist = max(vec_dict.values()) or 1.0
-            vec_norm = {img_id: 1 - (d / max_dist) for img_id, d in vec_dict.items()}
-        else:
-            vec_norm = {}
-
-        # Normalize text scores to [0, 1]
-        txt_dict = {make_id(r): r["text_score"] for r in text_results}
-        if txt_dict:
-            max_score = max(txt_dict.values()) or 1.0
-            txt_norm = {img_id: s / max_score for img_id, s in txt_dict.items()}
-        else:
-            txt_norm = {}
-
-        # Weighted fusion
-        final_scores = {}
-        all_ids = set(vec_norm.keys()) | set(txt_norm.keys())
-        text_weight = 1 - vector_weight
-
-        for img_id in all_ids:
-            vec_sim = vec_norm.get(img_id, 0)
-            txt_sim = txt_norm.get(img_id, 0)
-            final_scores[img_id] = vector_weight * vec_sim + text_weight * txt_sim
-
-        # Sort by fusion score
-        sorted_ids = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)[
-            :limit
-        ]
-
-        # Build full result with complete info
-        id_to_info = {}
-        for r in vector_results + text_results:
-            img_id = make_id(r)
-            if img_id not in id_to_info:
-                id_to_info[img_id] = r
-
-        logger.info("Fused %s results from vector and text search.", len(sorted_ids))
-        return [
-            {
-                **id_to_info[img_id],
-                "fusion_score": score,
-                "distance": id_to_info[img_id].get("distance"),
-            }
-            for img_id, score in sorted_ids
-            if img_id in id_to_info
-        ]
+        logger.info("Text search returned %s results.", len(ids))
+        return self._format_get_results(ids, metadatas, documents)
 
     def hybrid_search(
         self,
@@ -264,6 +206,9 @@ class OBImageStore:
     ) -> list[dict[str, Any]]:
         """
         Hybrid search: vector + text with weighted fusion.
+
+        Uses pyseekdb's native hybrid_search (RRF ranking) when both
+        vector and text channels are active.
 
         Args:
             image_path: Path to the query image.
@@ -277,7 +222,6 @@ class OBImageStore:
         # Pure vector search
         if vector_weight == 1.0:
             results = self.search(image_path, limit=limit)
-            # Apply distance threshold filter
             if distance_threshold is not None:
                 results = [
                     r for r in results if r.get("distance", 0) <= distance_threshold
@@ -291,35 +235,110 @@ class OBImageStore:
 
             query_caption = caption_img(image_path)
             results = self.text_search(query_caption, limit=limit)
-            # Add distance field as None for consistency
             for r in results:
                 r["distance"] = None
             logger.info("Pure text search returned %s results.", len(results))
             return results
 
-        # Hybrid: recall 5x, then fuse
-        recall_limit = limit * 5
-        vector_results = self.search(image_path, limit=recall_limit)
-
-        # Filter vector results by distance threshold before fusion
-        if distance_threshold is not None:
-            vector_results = [
-                r for r in vector_results if r.get("distance", 0) <= distance_threshold
-            ]
-            logger.info(
-                "Filtered vector results by threshold %.2f: %s remaining.",
-                distance_threshold,
-                len(vector_results),
-            )
-
+        # Hybrid: use pyseekdb native hybrid_search with RRF
         from .embeddings import caption_img
 
+        logger.info("Performing hybrid search for %s.", image_path)
+        target_embedding = embed_img(image_path)
         query_caption = caption_img(image_path)
-        text_results = self.text_search(query_caption, limit=recall_limit)
 
-        logger.info(
-            "Hybrid search: %s vector + %s text results before fusion.",
-            len(vector_results),
-            len(text_results),
+        table_name = self.table_name
+        collection = self._get_collection(table_name)
+
+        recall_limit = limit * 5
+        results = collection.hybrid_search(
+            query={
+                "where_document": {"$contains": query_caption},
+                "n_results": recall_limit,
+            },
+            knn={
+                "query_embeddings": [target_embedding],
+                "n_results": recall_limit,
+            },
+            rank={"rrf": {}},
+            n_results=limit,
+            include=["metadatas", "documents"],
         )
-        return self._fuse_results(vector_results, text_results, vector_weight, limit)
+
+        ids = results.get("ids", [[]])[0]
+        metadatas = results.get("metadatas", [[]])[0]
+        documents = results.get("documents", [[]])[0]
+        distances = results.get("distances", [[]])[0] if results.get("distances") else []
+
+        formatted = self._format_query_results(ids, metadatas, documents, distances)
+
+        # Apply distance threshold filter if provided
+        if distance_threshold is not None:
+            formatted = [
+                r for r in formatted
+                if r.get("distance") is None or r.get("distance", 0) <= distance_threshold
+            ]
+            logger.info(
+                "Filtered hybrid results by threshold %.2f: %s remaining.",
+                distance_threshold,
+                len(formatted),
+            )
+
+        logger.info("Hybrid search returned %s results.", len(formatted))
+        return formatted
+
+    # -------------------------------------------------------------------------
+    # Result formatting helpers
+    # -------------------------------------------------------------------------
+
+    def _format_query_results(
+        self,
+        ids: list[str],
+        metadatas: list[dict[str, Any]],
+        documents: list[str],
+        distances: list[float],
+    ) -> list[dict[str, Any]]:
+        """Format pyseekdb query/hybrid_search results (nested list already unpacked)."""
+        results = []
+        for i, cid in enumerate(ids):
+            meta = metadatas[i] if i < len(metadatas) else {}
+            file_name = meta.get("file_name", "")
+            file_path = meta.get("file_path", "")
+            if not file_name and not file_path:
+                file_name, file_path = _split_composite_id(cid)
+            caption = documents[i] if i < len(documents) else ""
+            distance = distances[i] if i < len(distances) else None
+            results.append(
+                {
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "caption": caption,
+                    "distance": distance,
+                }
+            )
+        return results
+
+    def _format_get_results(
+        self,
+        ids: list[str],
+        metadatas: list[dict[str, Any]],
+        documents: list[str],
+    ) -> list[dict[str, Any]]:
+        """Format pyseekdb collection.get results (flat lists, no distances)."""
+        results = []
+        for i, cid in enumerate(ids):
+            meta = metadatas[i] if i < len(metadatas) else {}
+            file_name = meta.get("file_name", "")
+            file_path = meta.get("file_path", "")
+            if not file_name and not file_path:
+                file_name, file_path = _split_composite_id(cid)
+            caption = documents[i] if i < len(documents) else ""
+            results.append(
+                {
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "caption": caption,
+                    "distance": None,
+                }
+            )
+        return results
