@@ -73,7 +73,7 @@ cp .env.example .env
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
 # 图片描述生成 API Key（混合/文本搜索时必需，纯向量搜索可不配置）
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # 数据库选择（seekdb 或 oceanbase）
 DB_STORE=seekdb
@@ -123,7 +123,7 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY**（必需）：用于图片向量生成的 API 密钥
   - 访问 [阿里云 DashScope](https://dashscope.console.aliyun.com/apiKey) 获取 API Key
-- **LLM_API_KEY**（混合/全文检索模式必需）：用于图片描述生成的 API 密钥
+- **VLM_API_KEY**（混合/全文检索模式必需）：用于图片描述生成的 API 密钥
   - 如果只使用向量检索模式（仅向量），则不需要配置
   - 支持 OpenAI、Qwen（通义千问）等兼容 OpenAI API 的服务
 
@@ -132,20 +132,20 @@ cp .env.example .env
 - **EMBEDDING_TYPE**：Embedding 后端类型（默认 `dashscope`）
 - **EMBEDDING_MODEL**：Embedding 模型名称（默认 `tongyi-embedding-vision-plus`）
 - **EMBEDDING_DIMENSION**：向量维度（默认 `1024`）
-- **BASE_URL**：图片描述 API 服务地址（默认为 Qwen 的服务地址）
+- **VLM_BASE_URL**：图片描述 API 服务地址（默认为 Qwen 的服务地址）
 - **MODEL**：图片描述使用的模型名称（默认为 `qwen-vl-max`）
 
 示例配置（`.env`）：
 ```bash
 # 必需配置
 EMBEDDING_API_KEY=sk-your-dashscope-key
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # 可选配置（使用默认值）
 EMBEDDING_TYPE=dashscope
 EMBEDDING_MODEL=tongyi-embedding-vision-plus
 EMBEDDING_DIMENSION=1024
-BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
 

@@ -2,6 +2,7 @@
 OceanBase image vector store wrapper (pyseekdb).
 """
 
+import os
 from typing import Any, Iterable, Iterator, Optional
 
 from tqdm import tqdm
@@ -219,6 +220,14 @@ class OBImageStore:
         Returns:
             Search results sorted by relevance.
         """
+        # If LLM key is missing, text/caption path is unavailable.
+        # Fall back to pure vector search even when user selects text/hybrid mode.
+        if vector_weight < 1.0 and not os.getenv("VLM_API_KEY", "").strip():
+            logger.warning(
+                "VLM_API_KEY not set; fallback to vector mode for search."
+            )
+            vector_weight = 1.0
+
         # Pure vector search
         if vector_weight == 1.0:
             results = self.search(image_path, limit=limit)

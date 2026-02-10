@@ -294,12 +294,14 @@ def caption_img(path: str) -> str:
     Returns:
         A text description of the image, or error message if generation fails.
     """
-    api_key = os.getenv("LLM_API_KEY")
-    base_url = os.getenv("BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    api_key = os.getenv("VLM_API_KEY")
+    base_url = os.getenv(
+        "VLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
     model = os.getenv("MODEL", "qwen-vl-max")
 
     if not api_key:
-        return "[Error: LLM_API_KEY not set]"
+        return "[Warning: VLM_API_KEY not set, fall back to vector-only mode]"
 
     try:
         with open(path, "rb") as f:

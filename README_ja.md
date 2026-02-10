@@ -74,7 +74,7 @@ cp .env.example .env
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
 # 画像キャプション API Key（ハイブリッド/全文検索モードで必須、ベクトルモードでは不要）
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # データベース選択（seekdb または oceanbase）
 DB_STORE=seekdb
@@ -128,7 +128,7 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY**（必須）：画像埋め込み生成用の API キー
   - [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) から API Key を取得してください
-- **LLM_API_KEY**（ハイブリッド/全文検索モードで必須）：画像キャプション生成用の API キー
+- **VLM_API_KEY**（ハイブリッド/全文検索モードで必須）：画像キャプション生成用の API キー
   - ベクトルモードのみを使用する場合は設定不要です
   - OpenAI、Qwen（通義千問）など、OpenAI API 互換のサービスをサポートしています
 
@@ -137,20 +137,20 @@ cp .env.example .env
 - **EMBEDDING_TYPE**：埋め込みバックエンドタイプ（デフォルト `dashscope`）
 - **EMBEDDING_MODEL**：埋め込みモデル名（デフォルト `tongyi-embedding-vision-plus`）
 - **EMBEDDING_DIMENSION**：ベクトル次元（デフォルト `1024`）
-- **BASE_URL**：画像キャプション API サービスエンドポイント（デフォルトは Qwen のサービス）
+- **VLM_BASE_URL**：画像キャプション API サービスエンドポイント（デフォルトは Qwen のサービス）
 - **MODEL**：画像キャプションモデル名（デフォルト `qwen-vl-max`）
 
 設定例（`.env`）：
 ```bash
 # 必須設定
 EMBEDDING_API_KEY=sk-your-dashscope-key
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # オプション設定（デフォルト値を使用）
 EMBEDDING_TYPE=dashscope
 EMBEDDING_MODEL=tongyi-embedding-vision-plus
 EMBEDDING_DIMENSION=1024
-BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
 

@@ -74,7 +74,7 @@ Edit `docker/.env` file and configure the required settings:
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
 # Image captioning API Key (required for hybrid/full-text mode, optional for vector mode)
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # Database selection (seekdb or oceanbase)
 DB_STORE=seekdb
@@ -128,7 +128,7 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY** (Required): API key for image embedding generation
   - Visit [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) to get an API Key
-- **LLM_API_KEY** (Required for hybrid/full-text mode): API key for image captioning
+- **VLM_API_KEY** (Required for hybrid/full-text mode): API key for image captioning
   - Not required if using vector mode only
   - Supports OpenAI, Qwen (Tongyi Qianwen), and other OpenAI-compatible services
 
@@ -137,20 +137,20 @@ Other configuration items (usually use default values):
 - **EMBEDDING_TYPE**: Embedding backend type (default `dashscope`)
 - **EMBEDDING_MODEL**: Embedding model name (default `tongyi-embedding-vision-plus`)
 - **EMBEDDING_DIMENSION**: Vector dimension (default `1024`)
-- **BASE_URL**: Image captioning API service endpoint (defaults to Qwen's service)
+- **VLM_BASE_URL**: Image captioning API service endpoint (defaults to Qwen's service)
 - **MODEL**: Image captioning model name (default `qwen-vl-max`)
 
 Example configuration (`.env`):
 ```bash
 # Required configuration
 EMBEDDING_API_KEY=sk-your-dashscope-key
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-dashscope-key
 
 # Optional configuration (use default values)
 EMBEDDING_TYPE=dashscope
 EMBEDDING_MODEL=tongyi-embedding-vision-plus
 EMBEDDING_DIMENSION=1024
-BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
 

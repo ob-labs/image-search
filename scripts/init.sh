@@ -70,7 +70,7 @@ else
     # Linux
     TOTAL_MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
 fi
-if [ -z "$TOTAL_MEM_GB" ] || [ "$TOTAL_MEM_GB" -lt 3 ]; then
+if [ -z "$TOTAL_MEM_GB" ] || [ "$TOTAL_MEM_GB" -lt 4 ]; then
     echo "Error: System memory is insufficient. Required: at least 8GB, Current: ${TOTAL_MEM_GB}GB"
     exit 1
 fi
