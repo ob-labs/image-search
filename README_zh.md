@@ -12,14 +12,14 @@
 
 本项目由 4 个核心部分组成：
 
-- **前端（Streamlit UI）**：负责图片上传、参数配置（如 top_k、vector_weight、distance_threshold）和结果展示。
+- **前端（Streamlit UI）**：负责图片上传、参数配置（如 top_k、搜索模式、distance_threshold）和结果展示。
 - **业务层（OBImageStore）**：封装了数据集加载、多维检索以及结果融合等核心逻辑，协调各模块完成图搜任务。
 - **特征与语义生成**：
   - **图片向量（Embedding）**：通过 DashScope Multimodal-Embedding API 为图片生成向量，用于相似度检索。
   - **图片描述（Caption）**：通过 OpenAI 兼容接口为图片生成短文本描述，用于全文检索与混合检索。
 - **存储层（OceanBase / seekdb）**：默认使用 seekdb 容器作为向量数据库能力承载；同时维护**向量索引**与**caption 全文索引**。
 
-下面按“数据集加载 / 图搜图 / 文本搜图”说明每一步实际做了什么。
+下面按“数据集加载 / 图搜图”说明每一步实际做了什么（文本搜索入口当前未对外暴露）。
 
 ### 1) 数据集加载
 使用方法：在侧边栏选择图片压缩包并点击 **加载图片**。
@@ -48,18 +48,11 @@
 2. **生成查询特征**：
    - **向量特征**：提取图片的向量，用于与数据库中的图片进行向量相似度检索。
    - **文本特征**：为图片生成文字描述（Caption），用于在数据库中进行全文检索。
-3. **双路召回**：
-   - **向量召回**：通过向量索引进行相似度搜索，并支持通过 `distance_threshold` 过滤不相关的结果。
-   - **文本召回**：通过 caption 全文索引进行匹配，召回语义相关的图片。
-4. **融合排序**：将两路检索结果进行归一化，并根据用户设定的 `vector_weight` 权重进行加权排序，输出最终的 Top K 结果。
-
-### 3) 文本搜图
-使用方法：输入一段文本并点击搜索。
-查询过程：
-
-1. **输入文本**：用户输入搜索关键词。
-2. **全文检索**：系统利用 OceanBase / seekdb 的全文检索能力，在图片描述（Caption）字段中进行匹配召回。
-3. **结果排序**：根据文本相关性得分进行排序，输出最终的 Top K 结果。
+3. **按搜索模式执行召回与排序**：
+   - **全文检索**：仅通过 caption 全文索引召回结果。
+   - **混合检索**：同时使用向量召回与全文召回，并通过 pyseekdb 原生 `hybrid_search`（RRF）进行融合排序。
+   - **向量检索**：仅通过向量索引进行相似度搜索，并支持通过 `distance_threshold` 过滤不相关结果。
+4. **返回 Top K**：输出最终的 Top K 结果。
 
 
 ## 快速启动（推荐）
@@ -79,8 +72,10 @@ cp .env.example .env
 # 图片向量生成 API Key（必需）
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# 图片描述生成 API Key（混合/文本搜索时必需，纯向量搜索可不配置）
-LLM_API_KEY=sk-your-dashscope-key
+# 图片描述 VLM API Key（混合/全文检索模式必需，向量模式可不配置）
+# 支持任何 OpenAI 兼容的 VLM 服务提供方
+VLM_API_KEY=sk-your-vlm-key
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # 数据库选择（seekdb 或 oceanbase）
 DB_STORE=seekdb
@@ -130,8 +125,8 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY**（必需）：用于图片向量生成的 API 密钥
   - 访问 [阿里云 DashScope](https://dashscope.console.aliyun.com/apiKey) 获取 API Key
-- **LLM_API_KEY**（混合/文本搜索必需）：用于图片描述生成的 API 密钥
-  - 如果只使用纯向量搜索（向量权重=1.0），则不需要配置
+- **VLM_API_KEY**（混合/全文检索模式必需）：用于图片描述生成的 API 密钥
+  - 如果只使用向量检索模式（仅向量），则不需要配置
   - 支持 OpenAI、Qwen（通义千问）等兼容 OpenAI API 的服务
 
 其他配置项（通常使用默认值即可）：
@@ -139,20 +134,20 @@ cp .env.example .env
 - **EMBEDDING_TYPE**：Embedding 后端类型（默认 `dashscope`）
 - **EMBEDDING_MODEL**：Embedding 模型名称（默认 `tongyi-embedding-vision-plus`）
 - **EMBEDDING_DIMENSION**：向量维度（默认 `1024`）
-- **BASE_URL**：图片描述 API 服务地址（默认为 Qwen 的服务地址）
+- **VLM_BASE_URL**：图片描述 API 服务地址（默认为 Qwen 的服务地址）
 - **MODEL**：图片描述使用的模型名称（默认为 `qwen-vl-max`）
 
 示例配置（`.env`）：
 ```bash
 # 必需配置
 EMBEDDING_API_KEY=sk-your-dashscope-key
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-vlm-key
 
 # 可选配置（使用默认值）
 EMBEDDING_TYPE=dashscope
 EMBEDDING_MODEL=tongyi-embedding-vision-plus
 EMBEDDING_DIMENSION=1024
-BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
 

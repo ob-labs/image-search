@@ -6,14 +6,15 @@ Database helpers for OceanBase image search.
 import argparse
 import os
 import sys
-from warnings import warn
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from pyobvector import ObVecClient, VECTOR
-from sqlalchemy import Column, String
+
+import pyseekdb
+from pyseekdb import Configuration, HNSWConfiguration
 
 from .logger import get_logger
+
 # Logger for database helpers
 logger = get_logger(__name__)
 
@@ -24,28 +25,15 @@ logger.info("Environment variables loaded for DB helpers.")
 # Consolidate connection parameters for reuse across modules
 connection_args = {
     "host": os.getenv("DB_HOST", ""),
-    "port": os.getenv("DB_PORT", ""),
+    "port": os.getenv("DB_PORT", "2881"),
     "user": os.getenv("DB_USER", ""),
     "password": os.getenv("DB_PASSWORD", ""),
     "db_name": os.getenv("DB_NAME", ""),
 }
 
-# Table schema used for image storage
-# file_name + file_path as composite primary key
-cols = [
-    Column("file_name", String(512), primary_key=True),
-    Column("file_path", String(512), primary_key=True),
-    Column("caption", String(2048)),
-    Column("embedding", VECTOR(1024)),
-]
+# Embedding dimension (must match the embedding API output)
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
 
-# Columns to return in ANN search results
-output_fields = [
-    "file_name",
-    "file_path",
-    "caption",
-    # "embedding",
-]
 # -----------------------------------------------------------------------------
 # Data Models
 # -----------------------------------------------------------------------------
@@ -54,10 +42,6 @@ output_fields = [
 class ImageData(BaseModel):
     """
     Typed container for image file metadata and embeddings.
-
-    NOTE: This model's fields strictly match the database table schema defined
-    in `cols`. Any changes to this model must be synchronized with the
-    table schema to ensure proper data insertion and retrieval.
     """
 
     file_name: str = ""
@@ -66,93 +50,61 @@ class ImageData(BaseModel):
     embedding: list[float]
 
 
-_VECTOR_MEMORY_PARAM = "ob_vector_memory_limit_percentage"
+def _get_raw_connection(client):
+    """Get the underlying pymysql connection from a pyseekdb client (or proxy)."""
+    # _ClientProxy wraps the real client in _server
+    real_client = getattr(client, "_server", client)
+    return real_client.get_raw_connection()
 
 
-def ensure_vector_memory_limit(client: ObVecClient) -> None:
-    values = fetch_vector_memory_percentages(client)
-    if not values:
-        logger.error("%s not found.", _VECTOR_MEMORY_PARAM)
-        raise RuntimeError(f"{_VECTOR_MEMORY_PARAM} not found.")
-    if any(value == 0 for value in values):
-        logger.warning(
-            "%s is 0; manual update may be required.",
-            _VECTOR_MEMORY_PARAM,
-        )
+def _execute_raw_sql(client, sql: str) -> list:
+    """Execute raw SQL via the underlying pymysql connection."""
+    conn = _get_raw_connection(client)
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
 
 
-def fetch_vector_memory_percentages(client: ObVecClient) -> list[int]:
-    params = client.perform_raw_text_sql(
-        f"SHOW PARAMETERS LIKE '%{_VECTOR_MEMORY_PARAM}%'"
-    )
-    return [int(row[6]) for row in params]
-
-
-def set_vector_memory_limit(client: ObVecClient, percent: int) -> None:
-    try:
-        client.perform_raw_text_sql(
-            f"ALTER SYSTEM SET {_VECTOR_MEMORY_PARAM} = {percent}"
-        )
-        logger.info(
-            "Updated %s to %s.",
-            _VECTOR_MEMORY_PARAM,
-            percent,
-        )
-    except Exception as exc:
-        logger.error(
-            "Failed to set %s: %s",
-            _VECTOR_MEMORY_PARAM,
-            exc,
-        )
-        raise RuntimeError(
-            f"Failed to set {_VECTOR_MEMORY_PARAM} to {percent}.",
-        ) from exc
-
-
-def build_client() -> ObVecClient:
-    return ObVecClient(
+def build_client():
+    """Build a pyseekdb Client in remote server mode."""
+    return pyseekdb.Client(
+        host=connection_args["host"],
+        port=int(connection_args["port"]),
+        database=connection_args["db_name"],
         user=connection_args["user"],
-        uri=f"{connection_args['host']}:{connection_args['port']}",
-        db_name=connection_args["db_name"],
         password=connection_args["password"],
     )
 
 
+def get_or_create_collection(client, collection_name: str):
+    """Get or create a collection with HNSW + fulltext config."""
+    config = Configuration(
+        hnsw=HNSWConfiguration(dimension=EMBEDDING_DIMENSION, distance="l2"),
+    )
+    return client.get_or_create_collection(
+        name=collection_name,
+        configuration=config,
+        embedding_function=None,
+    )
+
+
 def create_table(table_name: str | None = None) -> None:
+    """Create the image search collection (table) if it doesn't exist."""
     table_name = table_name or os.getenv("IMG_TABLE_NAME", "image_search")
     client = build_client()
 
-    if client.check_table_exists(table_name):
-        logger.info("Table '%s' already exists. Skipping creation.", table_name)
+    if client.has_collection(table_name):
+        logger.info("Collection '%s' already exists. Skipping creation.", table_name)
         return
 
-    logger.info("Creating table '%s'...", table_name)
-    client.create_table(table_name, columns=cols)
-
-    logger.info(
-        "Creating vector index 'img_embedding_idx' on table '%s'...",
-        table_name,
-    )
-    client.create_index(
-        table_name,
-        is_vec_index=True,
-        index_name="img_embedding_idx",
-        column_names=["embedding"],
-        vidx_params="distance=l2, type=hnsw, lib=vsag",
-    )
-
-    # Create fulltext index for caption
-    logger.info("Creating fulltext index 'caption_idx' on table '%s'...", table_name)
-    client.perform_raw_text_sql(
-        f"ALTER TABLE {table_name} ADD FULLTEXT INDEX caption_idx (caption)"
-    )
-
-    logger.info("Table '%s' created successfully!", table_name)
+    logger.info("Creating collection '%s'...", table_name)
+    get_or_create_collection(client, table_name)
+    logger.info("Collection '%s' created successfully!", table_name)
 
 
 def check_connection() -> None:
     client = build_client()
-    client.perform_raw_text_sql("SELECT 1")
+    _execute_raw_sql(client, "SELECT 1")
     logger.info("Database connection check executed.")
 
 
@@ -161,13 +113,13 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     create_parser = subparsers.add_parser(
-        "create-table", help="Create the image search table"
+        "create-table", help="Create the image search collection"
     )
     create_parser.add_argument(
         "--table-name",
         type=str,
         default=None,
-        help="Table name to create (defaults to IMG_TABLE_NAME)",
+        help="Collection name to create (defaults to IMG_TABLE_NAME)",
     )
 
     subparsers.add_parser("check-connection", help="Check database connection")
@@ -186,7 +138,7 @@ def main() -> None:
         if args.command == "check-connection":
             logger.error("Database connection failed: %s", e)
         else:
-            logger.error("Failed to create table: %s", e)
+            logger.error("Failed to create collection: %s", e)
         sys.exit(1)
 
 

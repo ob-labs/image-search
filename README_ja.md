@@ -12,14 +12,14 @@ OceanBase のベクトル保存および検索機能を活用することで、�
 
 本プロジェクトは以下の4つのコアコンポーネントで構成されています。
 
-- **フロントエンド（Streamlit UI）**：画像のアップロード、パラメータ設定（top_k、vector_weight、distance_thresholdなど）、および結果の表示を担当します。
+- **フロントエンド（Streamlit UI）**：画像のアップロード、パラメータ設定（top_k、検索モード、distance_thresholdなど）、および結果の表示を担当します。
 - **アプリケーション層（OBImageStore）**：データセットの読み込み、多次元検索、および結果の融合に関するコアロジックをカプセル化し、検索タスクを完了するために各モジュールを調整します。
 - **特徴量とセマンティック情報の抽出・生成**：
   - **画像ベクトル（Embedding）**：DashScope Multimodal-Embedding API を介して画像ベクトルを生成し、類似度検索に使用します。
   - **画像説明（Caption）**：全文検索およびハイブリッド検索用に、OpenAI互換インターフェースを介して画像の内容を説明する短いテキストを生成します。
 - **ストレージ層（OceanBase / seekdb）**：デフォルトで seekdb コンテナをベクトルデータベースとして使用します。**ベクトルインデックス**と**キャプション全文インデックス**の両方を同時に維持します。
 
-以下に、「データセットの読み込み / 画像検索 / テキスト検索」の各ステップを説明します。
+以下に、「データセットの読み込み / 画像検索」の各ステップを説明します（単体のテキスト検索UIは現在非表示です）。
 
 ### 1) データセットの読み込み
 
@@ -50,20 +50,11 @@ OceanBase のベクトル保存および検索機能を活用することで、�
 2. **クエリ特徴量の生成**：
    - **ベクトル特徴量**：データベース内の画像に対してベクトル類似度検索を行うために、画像のベクトルを抽出します。
    - **テキスト特徴量**：データベースでの全文検索用に、画像の内容を説明するテキスト（Caption）を生成します。
-3. **2つのシステムによる検索（ハイブリッド検索）**：
-   - **ベクトルリコール**：ベクトルインデックスを介して類似度検索を実行し、`distance_threshold` を通じて無関係な結果のフィルタリングをサポートします。
-   - **テキストリコール**：キャプション全文インデックスを介して一致を確認し、意味的に関連のある画像をリコールします。
-4. **融合とランキング**：両方のパスからの結果を正規化し、ユーザー定義の `vector_weight` 重みに基づいて重み付けランキングを行い、最終的な Top K 結果を出力します。
-
-### 3) テキスト検索
-
-使用方法：テキストクエリを入力して検索をクリックします。
-
-検索プロセス：
-
-1. **テキストの入力**：ユーザーが検索キーワードを入力します。
-2. **全文検索**：システムは OceanBase / seekdb の全文検索機能を活用し、Caption フィールドに基づいて画像を照合し、リコールします。
-3. **結果のランキング**：テキストの関連性スコアに基づいて結果をランク付けし、最終的な Top K 結果を出力します。
+3. **検索モードに応じたリコールとランキング**：
+   - **全文検索モード**：caption 全文インデックスのみで結果をリコールします。
+   - **ハイブリッドモード**：ベクトルと全文の両方を使い、pyseekdb のネイティブ `hybrid_search`（RRF）で融合・ランキングします。
+   - **ベクトルモード**：ベクトル類似検索のみを行い、`distance_threshold` によるフィルタリングをサポートします。
+4. **Top K を返却**：最終的な Top K 結果を出力します。
 
 ## クイックスタート（推奨）
 
@@ -82,8 +73,10 @@ cp .env.example .env
 # 画像埋め込み API Key（必須）
 EMBEDDING_API_KEY=sk-your-dashscope-key
 
-# 画像キャプション API Key（ハイブリッド/テキスト検索時に必須、純粋なベクトル検索では不要）
-LLM_API_KEY=sk-your-dashscope-key
+# 画像キャプション VLM API Key（ハイブリッド/全文検索モードで必須、ベクトルモードでは不要）
+# OpenAI 互換の VLM プロバイダで利用可能
+VLM_API_KEY=sk-your-vlm-key
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # データベース選択（seekdb または oceanbase）
 DB_STORE=seekdb
@@ -137,8 +130,8 @@ cp .env.example .env
 
 - **EMBEDDING_API_KEY**（必須）：画像埋め込み生成用の API キー
   - [Alibaba Cloud DashScope](https://dashscope.console.aliyun.com/apiKey) から API Key を取得してください
-- **LLM_API_KEY**（ハイブリッド/テキスト検索に必須）：画像キャプション生成用の API キー
-  - 純粋なベクトル検索（ベクトル重み=1.0）のみを使用する場合は設定不要です
+- **VLM_API_KEY**（ハイブリッド/全文検索モードで必須）：画像キャプション生成用の API キー
+  - ベクトルモードのみを使用する場合は設定不要です
   - OpenAI、Qwen（通義千問）など、OpenAI API 互換のサービスをサポートしています
 
 その他の設定項目（通常はデフォルト値を使用）：
@@ -146,20 +139,20 @@ cp .env.example .env
 - **EMBEDDING_TYPE**：埋め込みバックエンドタイプ（デフォルト `dashscope`）
 - **EMBEDDING_MODEL**：埋め込みモデル名（デフォルト `tongyi-embedding-vision-plus`）
 - **EMBEDDING_DIMENSION**：ベクトル次元（デフォルト `1024`）
-- **BASE_URL**：画像キャプション API サービスエンドポイント（デフォルトは Qwen のサービス）
+- **VLM_BASE_URL**：画像キャプション API サービスエンドポイント（デフォルトは Qwen のサービス）
 - **MODEL**：画像キャプションモデル名（デフォルト `qwen-vl-max`）
 
 設定例（`.env`）：
 ```bash
 # 必須設定
 EMBEDDING_API_KEY=sk-your-dashscope-key
-LLM_API_KEY=sk-your-dashscope-key
+VLM_API_KEY=sk-your-vlm-key
 
 # オプション設定（デフォルト値を使用）
 EMBEDDING_TYPE=dashscope
 EMBEDDING_MODEL=tongyi-embedding-vision-plus
 EMBEDDING_DIMENSION=1024
-BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-vl-max
 ```
 
